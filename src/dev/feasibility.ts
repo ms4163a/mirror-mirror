@@ -5,7 +5,8 @@
 //   ?delegate=CPU        force the CPU delegate (default tries GPU, falls back to CPU)
 //   ?bench=<image url>   benchmark without a camera: the image is drawn twice side
 //                        by side and fed to the tracker every animation frame
-import { FaceLandmarker, FilesetResolver, type FaceLandmarkerResult } from "@mediapipe/tasks-vision";
+import { FaceLandmarker, type FaceLandmarkerResult } from "@mediapipe/tasks-vision";
+import { createLandmarker } from "../tracking/faceTracker";
 
 const params = new URLSearchParams(location.search);
 const benchUrl = params.get("bench");
@@ -24,31 +25,12 @@ function setStatus(s: string) {
   $("status").textContent = s;
 }
 
-async function createLandmarker(delegate: "GPU" | "CPU") {
-  const fileset = await FilesetResolver.forVisionTasks("/mediapipe/wasm");
-  return FaceLandmarker.createFromOptions(fileset, {
-    baseOptions: { modelAssetPath: "/models/face_landmarker.task", delegate },
-    runningMode: "VIDEO",
-    numFaces: 2,
-    outputFaceBlendshapes: true,
-    outputFacialTransformationMatrixes: true,
-  });
-}
-
 async function initLandmarker(): Promise<FaceLandmarker> {
-  const forced = params.get("delegate")?.toUpperCase();
-  const order: ("GPU" | "CPU")[] = forced === "CPU" ? ["CPU"] : ["GPU", "CPU"];
-  for (const d of order) {
-    try {
-      const lm = await createLandmarker(d);
-      stats.delegate = d;
-      $("delegate").textContent = d;
-      return lm;
-    } catch (err) {
-      console.warn(`FaceLandmarker ${d} delegate failed`, err);
-    }
-  }
-  throw new Error("Could not create FaceLandmarker with any delegate");
+  const forced = params.get("delegate")?.toUpperCase() === "CPU" ? "CPU" : undefined;
+  const { landmarker, delegate } = await createLandmarker(forced);
+  stats.delegate = delegate;
+  $("delegate").textContent = delegate;
+  return landmarker;
 }
 
 // Returns the element the tracker reads from, sized like the video it stands for.
@@ -116,7 +98,7 @@ function updatePanels(result: FaceLandmarkerResult, order: number[]) {
 }
 
 // --- overlay ----------------------------------------------------------------
-const COLORS = ["#ff7a59", "#4fc3f7"];
+const COLORS = ["#e8552a", "#2f9fdc"];
 
 function drawOverlay(result: FaceLandmarkerResult, order: number[], w: number, h: number) {
   if (overlay.width !== w || overlay.height !== h) {

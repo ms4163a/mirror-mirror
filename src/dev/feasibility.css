@@ -1,0 +1,76 @@
+:root {
+  --bg: #12131a;
+  --panel: #1c1e28;
+  --text: #e8e8ef;
+  --muted: #8a8ca0;
+  --ok: #5fd38d;
+  --bad: #ff6b6b;
+  --p0: #e8552a;
+  --p1: #2f9fdc;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 system-ui, sans-serif;
+}
+
+header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 24px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #2a2c3a;
+}
+
+h1 { margin: 0; font-size: 18px; }
+h1 span { color: var(--muted); font-weight: 400; }
+
+#stats { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--muted); }
+#stats b { color: var(--text); font-variant-numeric: tabular-nums; }
+#stats b.ok { color: var(--ok); }
+#stats b.bad { color: var(--bad); }
+
+main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+#stage { position: relative; max-width: 960px; width: 100%; margin: 0 auto; }
+
+#video, #overlay {
+  display: block;
+  width: 100%;
+  height: auto;
+  transform: scaleX(-1); /* selfie view */
+  border-radius: 8px;
+}
+
+#overlay { position: absolute; inset: 0; pointer-events: none; }
+
+#panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+
+.panel { background: var(--panel); border-radius: 8px; padding: 10px 12px; }
+.panel h2 { margin: 0 0 8px; font-size: 14px; }
+#panel-0 h2 { color: var(--p0); }
+#panel-1 h2 { color: var(--p1); }
+.panel.missing { opacity: 0.4; }
+
+.bars { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 2px 16px; }
+
+.bar { display: grid; grid-template-columns: 150px 1fr 34px; align-items: center; gap: 6px; font-size: 11px; }
+.bar label { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar.hot label { color: var(--text); }
+.bar output { text-align: right; font-variant-numeric: tabular-nums; }
+.track { height: 6px; background: #2a2c3a; border-radius: 3px; overflow: hidden; }
+.fill { height: 100%; width: 0; background: var(--muted); }
+#panel-0 .fill { background: var(--p0); }
+#panel-1 .fill { background: var(--p1); }

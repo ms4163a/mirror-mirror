@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mirror, Mirror — feasibility test</title>
+    <link rel="stylesheet" href="/src/dev/feasibility.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Mirror, Mirror <span>· two-face feasibility test</span></h1>
+      <div id="stats">
+        <span>status <b id="status">loading…</b></span>
+        <span>delegate <b id="delegate">–</b></span>
+        <span>faces <b id="faces">0</b></span>
+        <span>inference fps <b id="fps">0</b></span>
+        <span>infer ms <b id="ms">0</b></span>
+        <span>2-face fps <b id="fps2">0</b></span>
+      </div>
+    </header>
+    <main>
+      <div id="stage">
+        <video id="video" playsinline muted></video>
+        <canvas id="overlay"></canvas>
+      </div>
+      <section id="panels">
+        <div class="panel" id="panel-0"><h2>Left player</h2><div class="bars"></div></div>
+        <div class="panel" id="panel-1"><h2>Right player</h2><div class="bars"></div></div>
+      </section>
+    </main>
+    <script type="module" src="/src/dev/feasibility.ts"></script>
+  </body>
+</html>

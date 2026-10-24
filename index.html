@@ -3,31 +3,61 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mirror, Mirror — feasibility test</title>
+    <title>Mirror, Mirror</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <header>
-      <h1>Mirror, Mirror <span>· two-face feasibility test</span></h1>
-      <div id="stats">
-        <span>status <b id="status">loading…</b></span>
-        <span>delegate <b id="delegate">–</b></span>
-        <span>faces <b id="faces">0</b></span>
-        <span>inference fps <b id="fps">0</b></span>
-        <span>infer ms <b id="ms">0</b></span>
-        <span>2-face fps <b id="fps2">0</b></span>
-      </div>
-    </header>
-    <main>
-      <div id="stage">
-        <video id="video" playsinline muted></video>
-        <canvas id="overlay"></canvas>
-      </div>
-      <section id="panels">
-        <div class="panel" id="panel-0"><h2>Left player</h2><div class="bars"></div></div>
-        <div class="panel" id="panel-1"><h2>Right player</h2><div class="bars"></div></div>
+    <div id="app">
+      <section id="stage">
+        <canvas id="scene"></canvas>
+        <div id="prompt" hidden><div id="prompt-title"></div><div id="prompt-hint"></div></div>
+        <div id="timer" hidden></div>
+        <div id="height">0.0 m</div>
+        <div id="screen">
+          <div id="screen-lobby" class="panel" hidden>
+            <h1>Mirror, Mirror</h1>
+            <p class="lede">Sit side by side and copy each other's faces. The better you mirror each other, the higher Jack climbs.</p>
+            <ul class="checks">
+              <li id="check-0"><i></i> <b class="p0">Left</b> player in view</li>
+              <li id="check-1"><i></i> <b class="p1">Right</b> player in view</li>
+            </ul>
+            <button id="start" class="primary" disabled>Start <kbd>Space</kbd></button>
+            <p class="fine">Everything runs on this computer. No video leaves the browser.</p>
+          </div>
+          <div id="screen-calibrate" class="panel" hidden>
+            <h2>Relax your faces</h2>
+            <p class="lede">Look at the camera and keep still for a moment while we measure your resting faces.</p>
+            <div class="meter"><div id="calib-bar"></div></div>
+          </div>
+          <div id="screen-countdown" hidden><div id="countdown-num">3</div></div>
+          <div id="screen-recap" class="panel wide" hidden></div>
+          <div id="screen-error" class="panel" hidden><h2>Something went wrong</h2><p id="error-msg"></p></div>
+        </div>
       </section>
-    </main>
-    <script type="module" src="/src/main.ts"></script>
+
+      <aside id="side">
+        <div id="cam">
+          <video id="video" playsinline muted></video>
+          <canvas id="cam-overlay"></canvas>
+          <span class="cam-tag p0-bg">Left</span>
+          <span class="cam-tag p1-bg">Right</span>
+          <span id="cam-note" hidden></span>
+        </div>
+        <div class="card">
+          <div class="card-head"><span>Sync</span><span id="sync-value">0%</span></div>
+          <div class="meter"><div id="sync-bar"></div></div>
+          <div id="leader">Warming up…</div>
+        </div>
+        <div class="card">
+          <div class="card-head"><span>Lag · last 15 s</span></div>
+          <canvas id="lag-graph"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-head"><span>Expression match</span></div>
+          <div id="families"></div>
+        </div>
+      </aside>
+    </div>
+    <script type="module" src="/src/app.ts"></script>
   </body>
 </html>
