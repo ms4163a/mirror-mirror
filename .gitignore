@@ -136,3 +136,7 @@ dist
 .pnp.*
 CLAUDE.md
 token.env
+
+# Mirror, Mirror: generated/local assets
+public/mediapipe/
+public/bench/
