@@ -1,5 +1,6 @@
 // Where player frames come from: the real camera, or simulated players for
 // camera-free development and testing (?sim=...).
+import { checkRecording, type Recording } from "../replay/recording";
 import { NUM_CHANNELS } from "../signal/channels";
 import { Performer, rng } from "../sync/synthetic";
 import { FaceTracker, type PlayerFrame, type TrackerFrame } from "../tracking/faceTracker";
@@ -76,3 +77,38 @@ export class SimSource implements FrameSource {
 }
 
 export const SIM_MODES: SimMode[] = ["mirror", "swap", "unison", "independent", "still", "solo"];
+
+/**
+ * Plays a recorded session in real time. Playback starts when `restart()` is
+ * called (app.ts calls it when the game starts) and holds the last frame at the end.
+ */
+export class ReplaySource implements FrameSource {
+  readonly kind = "sim";
+  private origin = NaN;
+  private next = 0;
+
+  constructor(readonly rec: Recording) {
+    checkRecording(rec);
+  }
+
+  restart(now: number) {
+    this.origin = now;
+    this.next = 0;
+  }
+
+  poll(now: number): TrackerFrame | null {
+    if (Number.isNaN(this.origin)) this.restart(now);
+    const frames = this.rec.frames;
+    if (this.next >= frames.length) return null;
+    const f = frames[this.next];
+    if (f.t > now - this.origin) return null;
+    this.next++;
+    const player = (v: number[] | null): PlayerFrame => ({
+      present: v !== null,
+      channels: v ? Float64Array.from(v) : new Float64Array(NUM_CHANNELS),
+      landmarks: null,
+      blendshapes: null,
+    });
+    return { t: this.origin + f.t, players: [player(f.a), player(f.b)] };
+  }
+}

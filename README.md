@@ -17,6 +17,21 @@ npm test           # sync engine, tracking and round tests
 - `?sim=mirror|swap|unison|independent|still|solo`: simulated players, no camera. Use these to work on the game and UI.
 - `?roundMs=20000`: shorter rounds for testing
 - `?delegate=CPU`: force the CPU tracker delegate
+- `?replay=<url>`: replay a recorded session in real time (put the file in `public/bench/`, e.g. `?replay=/bench/round.json`)
+- `?coach=off`: skip the Llama coach's note
+
+### Recording real sessions for tuning
+"Download round data" on the recap saves a JSON file containing the recap, the 10 Hz samples and a **recording**: raw channel frames from calibration to the end of the round. A recording can be:
+- replayed through the live game with `?replay=`
+- re-scored offline with different settings using `rescore()` in `src/replay/rescore.ts`, which gives the same result as the live game
+
+Please save a few real two-person rounds during playtesting. They're what we tune `chanceR`, the climb settings and `IN_SYNC` on.
+
+### Llama coach's note (optional, needs Ollama)
+With Ollama running locally (`ollama pull llama3.1:8b`), the recap gets a 2–3 sentence coach's note. The dev server proxies `/ollama` to `http://localhost:11434`.
+- **Input:** the model receives only the measured recap numbers (`recapFacts()` in `src/llm/coach.ts`) and must return JSON listing the facts it used.
+- **Checks:** every number in the note must belong to one of the facts it listed, and relationship or compatibility language is rejected.
+- **Fallback:** if Ollama is off, slow, or the note fails the checks, no note is shown and everything else works the same.
 
 ### Art
 The scene uses simple vector placeholder shapes. Drop `public/assets/jack.png` (Jack, feet at the bottom of the image) in and it replaces the placeholder automatically.

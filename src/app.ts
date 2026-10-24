@@ -6,10 +6,13 @@
 //   ?sim=mirror|swap|unison|independent|still|solo   simulated players, no camera
 //   ?delegate=CPU                                     force the CPU tracker delegate
 //   ?roundMs=20000                                    shorter rounds for testing
-import { promptAt } from "./game/prompts";
+//   ?replay=<url>                                     replay a recorded session (from "Download round data")
+//   ?coach=off                                        skip the Llama coach's note
 import { computeRecap, type Recap } from "./game/recap";
 import { Round } from "./game/round";
-import { CameraSource, SIM_MODES, SimSource, type FrameSource, type SimMode } from "./input/sources";
+import { cancelCoachNote, showCoachNote } from "./llm/coachView";
+import { CameraSource, ReplaySource, SIM_MODES, SimSource, type FrameSource, type SimMode } from "./input/sources";
+import { FrameRecorder, type Recording } from "./replay/recording";
 import { SyncEngine, type SyncSnapshot } from "./sync/syncEngine";
 import { FaceTracker, createLandmarker, openCamera } from "./tracking/faceTracker";
 import { Hud } from "./ui/hud";
@@ -22,7 +25,7 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const CALIBRATE_MS = 4000;
 const COUNTDOWN_MS = 3000;
 const SNAPSHOT_EVERY_MS = 100;
-const ROUND_MS = Number(params.get("roundMs")) || undefined;
+let roundMs = Number(params.get("roundMs")) || undefined;
 
 type ScreenName = "lobby" | "calibrate" | "countdown" | "round" | "recap" | "error";
 
@@ -47,6 +50,9 @@ let snap: SyncSnapshot | null = null;
 let displaySync = 0;
 let presence: [boolean, boolean] = [false, false];
 let lastPromptIndex = -1;
+// Raw frames from calibration to the end of the round, for offline tuning.
+const recorder = new FrameRecorder();
+let recording: Recording | null = null;
 
 // Read-only debug handle for headless checks.
 const debug = {
@@ -54,6 +60,7 @@ const debug = {
   get height() { return round?.height ?? 0; },
   get snap() { return snap; },
   get recap() { return recap; },
+  get recording() { return recording; },
   start: () => startGame(),
 };
 (window as unknown as { __mm: typeof debug }).__mm = debug;
@@ -66,9 +73,14 @@ function show(name: ScreenName) {
   $("timer").hidden = name !== "round";
 }
 
-function startGame() {
+function startGame(force = false) {
   if (screen !== "lobby" && screen !== "recap") return;
-  if (screen === "lobby" && !(presence[0] && presence[1])) return;
+  if (screen === "lobby" && !force && !(presence[0] && presence[1])) return;
+  const now = performance.now();
+  cancelCoachNote();
+  if (source instanceof ReplaySource) source.restart(now);
+  recorder.begin(now);
+  recorder.mark("calibrateStart", now);
   // Fresh engine per game so the history and calibration are clean.
   engine = new SyncEngine();
   engine.startCalibration();
@@ -81,17 +93,20 @@ function startGame() {
 
 function finishRound() {
   if (!round) return;
+  recorder.mark("roundEnd", performance.now());
+  recording = recorder.finish(round.durationMs);
   recap = computeRecap(round.samples, round.durationMs);
   const host = $("screen-recap");
   show("recap");
   renderRecap(host, recap, round.samples);
-  host.querySelector('[data-action="again"]')!.addEventListener("click", startGame);
+  host.querySelector('[data-action="again"]')!.addEventListener("click", () => startGame());
   host.querySelector('[data-action="download"]')!.addEventListener("click", downloadRound);
+  if (params.get("coach") !== "off") showCoachNote(host, recap);
 }
 
 function downloadRound() {
   if (!round || !recap) return;
-  const blob = new Blob([JSON.stringify({ recap, samples: round.samples }, null, 1)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify({ recap, samples: round.samples, recording })], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `mirror-round-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
@@ -101,7 +116,8 @@ function downloadRound() {
 
 function updatePrompt() {
   if (!round) return;
-  const { card, index } = promptAt(round.elapsed);
+  // Round.prompt scales the 60 s script to the round's length (?roundMs=).
+  const { card, index } = round.prompt;
   if (index !== lastPromptIndex) {
     lastPromptIndex = index;
     $("prompt-title").textContent = card.title;
@@ -127,6 +143,7 @@ function tick(now: number) {
   if (frame) {
     const [a, b] = frame.players;
     presence = [a.present, b.present];
+    recorder.push(frame);
     engine.push(frame.t, a.present ? a.channels : null, b.present ? b.channels : null);
     const w = source.kind === "camera" ? video.videoWidth : 1280;
     const h = source.kind === "camera" ? video.videoHeight : 720;
@@ -150,13 +167,15 @@ function tick(now: number) {
       $("calib-bar").style.width = `${Math.min(100, (elapsed / CALIBRATE_MS) * 100)}%`;
       if (elapsed >= CALIBRATE_MS) {
         engine.endCalibration();
+        recorder.mark("calibrateEnd", now);
         show("countdown");
       }
       break;
     case "countdown":
       $("countdown-num").textContent = String(Math.max(1, Math.ceil((COUNTDOWN_MS - elapsed) / 1000)));
       if (elapsed >= COUNTDOWN_MS) {
-        round = new Round(ROUND_MS);
+        round = new Round(roundMs);
+        recorder.mark("roundStart", now);
         lastPromptIndex = -1;
         show("round");
       }
@@ -188,7 +207,16 @@ async function init() {
   show("lobby");
   const sim = params.get("sim") as SimMode | null;
   try {
-    if (sim && SIM_MODES.includes(sim)) {
+    const replayUrl = params.get("replay");
+    if (replayUrl) {
+      const rec: Recording = await (await fetch(replayUrl)).json();
+      // Accept both a bare recording and the full "Download round data" file.
+      const replay = new ReplaySource("frames" in rec ? rec : (rec as { recording: Recording }).recording);
+      source = replay;
+      roundMs = replay.rec.roundMs;
+      $("cam-note").hidden = false;
+      $("cam-note").textContent = `Replaying ${replayUrl.split("/").pop()}`;
+    } else if (sim && SIM_MODES.includes(sim)) {
       source = new SimSource(sim);
       $("cam-note").hidden = false;
       $("cam-note").textContent = `Simulated players: ${sim}`;
@@ -209,17 +237,24 @@ async function init() {
     show("error");
     return;
   }
-  $("start").addEventListener("click", startGame);
+  $("start").addEventListener("click", () => startGame());
   window.addEventListener("keydown", (e) => {
     if (e.code === "Space" || e.code === "Enter") {
       e.preventDefault();
       startGame();
     } else if (e.code === "Escape") {
+      // Abandon the round. startGame() rebuilds the engine, so only display state needs clearing.
       round = null;
+      recap = null;
+      recorder.finish(0); // discard
+      hud.clearHistory();
+      scene.reset();
       show("lobby");
     }
   });
   requestAnimationFrame(tick);
+  // A replay starts by itself so its calibration and round line up with the recording.
+  if (source instanceof ReplaySource) startGame(true);
 }
 
 init();

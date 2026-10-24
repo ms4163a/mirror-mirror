@@ -1,0 +1,11 @@
+.coach {
+  margin-top: 18px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--panel);
+  border-left: 3px solid var(--accent);
+}
+.coach-head { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.coach-text { margin: 6px 0; font-size: 15px; }
+.coach.loading .coach-text { color: var(--muted); font-style: italic; }
+.coach-foot { font-size: 11px; color: var(--muted); }
