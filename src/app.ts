@@ -280,6 +280,22 @@ function guestTick(dt: number) {
   scene.render(dt, { height, sync: displaySync, slipping: screen === "round" && !!snap && !snap.active && height > 0 });
 }
 
+/** Links the guest can open. On localhost they'd be useless, so ask the server for this PC's network addresses. */
+let guestLinks: { url: string; label: string }[] = [];
+
+async function loadGuestLinks(room: string) {
+  const make = (host: string) => `${location.protocol}//${host}${location.port ? `:${location.port}` : ""}${location.pathname}?room=${room}&seat=right`;
+  guestLinks = [{ url: make(location.hostname), label: "" }];
+  if (!/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) return;
+  try {
+    const res = await fetch("/api/addresses", { signal: AbortSignal.timeout(3000) });
+    const { addresses } = (await res.json()) as { addresses: { address: string; label: string }[] };
+    if (addresses.length) guestLinks = addresses.map((a) => ({ url: make(a.address), label: a.label }));
+  } catch {
+    // Keep the localhost link; the README explains how to find the address.
+  }
+}
+
 function updateRemoteInfo(l: RemoteLink) {
   const el = $("remote-info");
   if (l.fatal) {
@@ -288,12 +304,12 @@ function updateRemoteInfo(l: RemoteLink) {
     return;
   }
   const you = l.isHost ? "Left" : "Right";
-  const guestUrl = `${location.origin}${location.pathname}?room=${l.code}&seat=right`;
+  const links = guestLinks.map((g) => `<br><b>${g.url}</b>${g.label ? ` <span class="muted">(${g.label})</span>` : ""}`).join("");
   const status = !l.connected
     ? "Connecting to the server…"
     : !l.peerConnected
       ? l.isHost
-        ? `Waiting for your partner. Send them this link: <b>${guestUrl}</b>`
+        ? `Waiting for your partner. Send them ${guestLinks.length > 1 ? "the link for a network you share" : "this link"}:${links}`
         : "Waiting for the host…"
       : !l.ready
         ? "Syncing clocks…"
@@ -407,9 +423,18 @@ async function init() {
     params.set("seat", "left");
     history.replaceState(null, "", `?${params}`);
   }
-  const room = params.get("room")?.toUpperCase();
+  const room = params.get("room")?.trim().toUpperCase();
   const seat = params.get("seat") as Seat | null;
-  if (room && /^[A-Z]{4}$/.test(room) && (seat === "left" || seat === "right")) {
+  if ((room !== undefined || seat !== null) && !(room && /^[A-Z]{4}$/.test(room) && (seat === "left" || seat === "right"))) {
+    // A typo in a shared link must not silently turn into a one-computer game.
+    $("error-msg").innerHTML =
+      `This remote-game link isn't valid: room codes are 4 letters (got "${(room ?? "").replace(/[<>&"]/g, "")}") and the seat must be left or right. ` +
+      `Ask the host to send the link again, or <a href="${location.pathname}">play on this computer</a>.`;
+    show("error");
+    return;
+  }
+  if (room && seat) {
+    void loadGuestLinks(room);
     link = new RemoteLink(room, seat);
     link.onMessage(onRemoteMessage);
     $("remote-info").hidden = false;

@@ -6,6 +6,7 @@
 //   anything else             static files from `staticDir` (the built app), if given
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readFile, stat } from "node:fs/promises";
+import { networkInterfaces } from "node:os";
 import { extname, join, normalize, resolve } from "node:path";
 import { buildView, rankOf, validateSubmission } from "../shared/leaderboard.ts";
 import type { RoundStore } from "./store.ts";
@@ -26,6 +27,19 @@ const TYPES: Record<string, string> = {
   ".ogg": "audio/ogg",
   ".wav": "audio/wav",
 };
+
+/** IPv4 addresses other machines might reach: LAN first, then Tailscale (which also works across networks). */
+export function networkAddresses(): { address: string; label: string }[] {
+  const out: { address: string; label: string; rank: number }[] = [];
+  for (const [name, infos] of Object.entries(networkInterfaces())) {
+    for (const i of infos ?? []) {
+      if (i.family !== "IPv4" || i.internal || i.address.startsWith("169.254.")) continue; // skip loopback and link-local
+      const tailscale = i.address.startsWith("100.") || /tailscale/i.test(name);
+      out.push({ address: i.address, label: tailscale ? `Tailscale (${name})` : name, rank: tailscale ? 1 : 0 });
+    }
+  }
+  return out.sort((a, b) => a.rank - b.rank).map(({ address, label }) => ({ address, label }));
+}
 
 export interface AppOptions {
   store: RoundStore;
@@ -83,6 +97,9 @@ export function createApp({ store, staticDir, log = () => {} }: AppOptions): Ser
       }
 
       if (url.pathname === "/api/health") return send(res, 200, { ok: true, store: store.name });
+
+      // This machine's network addresses, so a host on localhost can show the guest a reachable link.
+      if (url.pathname === "/api/addresses" && req.method === "GET") return send(res, 200, { addresses: networkAddresses() });
 
       if (url.pathname === "/api/leaderboard" && req.method === "GET") {
         const limit = Math.min(50, Math.max(1, Number(url.searchParams.get("limit")) || 10));

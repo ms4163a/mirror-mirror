@@ -19,10 +19,12 @@ npm run typecheck  # browser + server code
 Each computer tracks only its own player. Only the face-channel numbers (21 per frame) go through the server, and **video never leaves either computer**. Each player sees both players as cartoon faces. The host (Left) runs the game and streams its state and the recap to the guest (Right). Lag is measured from timestamps on a clock synced with ping/pong, not from arrival times, so network delay doesn't distort it.
 
 1. On the host machine: `npm run dev:https` (game + server over HTTPS). Browsers only allow the camera on `https://` or `localhost`.
-2. Host: open `https://localhost:5173/?remote=new`, or click "Start a remote game" in the lobby. The lobby shows a link like `https://<host-IP>:5173/?room=ABCD&seat=right`.
+2. Host: open `https://localhost:5173/?remote=new`, or click "Start a remote game" in the lobby. The lobby lists a guest link for each of this PC's network addresses, for example `https://192.168.1.23:5173/?room=ABCD&seat=right (Wi-Fi)` and a Tailscale one. Send the one for a network you both share.
 3. Guest, on another computer on the same network: open that link and accept the self-signed-certificate warning ("Advanced", then "Proceed"). If it won't load, allow Node through the Windows firewall on the host.
+   Campus and venue Wi-Fi often blocks devices from reaching each other. If the guest's page never loads, use Tailscale (both machines signed in to the same tailnet, then the Tailscale link) or a tunnel (step 4).
 4. Different networks: expose the host with a tunnel instead, for example `npx cloudflared tunnel --url https://localhost:5173 --no-tls-verify` or Tailscale Funnel. Then share the tunnel URL with `?room=ABCD&seat=right`. The dev server already allows `*.trycloudflare.com` and `*.ts.net`.
-5. Either player presses Space to start. Remote rounds count on the leaderboard like local camera rounds, and the host's "Download round data" includes both players' streams.
+5. A mistyped link (room codes are 4 letters) shows an error instead of quietly starting a one-computer game.
+6. Either player presses Space to start. Remote rounds count on the leaderboard like local camera rounds, and the host's "Download round data" includes both players' streams.
 
 Test without cameras: open `?room=TEST&seat=left&sim=mirror` and `?room=TEST&seat=right&sim=mirror` in two browsers.
 

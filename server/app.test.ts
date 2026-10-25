@@ -74,4 +74,14 @@ describe("leaderboard server", () => {
     ctrl.abort();
     expect(text).toContain('"team":"Live"');
   });
+
+  it("lists this machine's network addresses for guest links", async () => {
+    const res = await fetch(`${base}/api/addresses`);
+    const { addresses } = (await res.json()) as { addresses: { address: string; label: string }[] };
+    expect(Array.isArray(addresses)).toBe(true);
+    for (const a of addresses) {
+      expect(a.address).toMatch(/^\d+\.\d+\.\d+\.\d+$/);
+      expect(a.address.startsWith("127.") || a.address.startsWith("169.254.")).toBe(false);
+    }
+  });
 });
