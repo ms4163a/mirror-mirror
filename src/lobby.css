@@ -32,3 +32,16 @@
 @media (prefers-reduced-motion: reduce) {
   .start-hint.flash { animation: none; color: #e0a020; }
 }
+#cam-warn {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 34px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(200, 40, 40, 0.88);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}

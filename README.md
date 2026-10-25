@@ -67,13 +67,19 @@ The scene uses simple vector placeholder shapes. Drop `public/assets/jack.png` (
 1. **Channels** (`src/signal/channels.ts`): 52 blendshapes become 18 expression channels, plus head yaw, pitch and roll. Left/right pairs are averaged and yaw and roll use absolute values, so mirroring and copying score the same. Gaze is dropped.
    **Smoothing:** each player's channels pass through a One Euro filter (`src/signal/oneEuro.ts`, cutoff 1.5 Hz, beta 2). It removes webcam jitter while a face holds still and stays responsive during fast moves. In playtesting it cut one player's frame-to-frame jitter about 3×. Turn it off with `?filter=off`.
 2. **History** (`src/sync/history.ts`): camera frames are resampled onto a fixed 30 Hz grid. A missing face is marked absent.
-3. **Sync engine** (`src/sync/syncEngine.ts`): every 100 ms, Pearson cross-correlation per channel on an **8 s** window at lags of **±1.5 s** (human reaction time), weighted by movement.
+3. **Sync engine** (`src/sync/syncEngine.ts`): every 100 ms, Pearson cross-correlation on a **10 s** window at lags of **±1.5 s** (human reaction time), weighted by movement.
    - A channel counts if either player moves on it; if only one does, it adds half weight (`oneSidedPenalty`) but no correlation, so different faces lower the score.
-   - Mouth channels carry the most weight. Brows, blinks and head pose count for less or nothing, because in real play they correlated about as well by chance.
+   - Mouth channels carry the most weight. Brows (0.25), blinks (0) and head pose count for less or nothing, because in real play they correlated about as well by chance.
    - **Matched by expression family** (`matchBy: "family"`): each player's channels in a family (smile, frown, mouth open…) are z-scored within the window and summed, and then the two players' family signals are correlated. In playtesting, one player's smile showed up mostly as dimples, pressed lips and squinted eyes rather than raised mouth corners. Channel-by-channel matching scored their smiles as 0; family matching counts them.
-   - The peak's height becomes **sync**: 0 at the chance level `chanceR` = 0.30, 1 at `fullR` = 0.55. The peak's position becomes **lag**, and its sign gives the **leader** (dead zone ±80 ms).
+   - The peak's height becomes **sync**: 0 at the chance level `chanceR` = 0.30, 1 at `fullR` = 0.48. The peak's position becomes **lag**, and its sign gives the **leader** (dead zone ±80 ms).
    - **Anti-stillness:** each player's movement is compared with their own floor from a 4 s calibration (capped at 1.5× the default, so fidgeting during calibration can't switch channels off). Two still faces score 0.
-   - **Tuning data:** these defaults come from three real two-person remote rounds, each compared against the same round with one player shifted 9–49 s in time (real faces, no mirroring). With the original 4 s settings, the first round scored 0.0 m. Now the real rounds score 42 / 36 / 22 m, and the shifted versions at most 8.5 / 4.8 / 3.6 m.
+   - **Tuning data:** five real two-person remote rounds. Every candidate setting was compared against 30 controls: the same rounds with one player shifted 7–47 s in time (real faces, no mirroring). The comparison was run at a matched false-positive rate, so settings are judged on how well they separate real mirroring from chance, not on how lenient they are.
+     - With the original 4 s settings, the first round scored 0.0 m.
+     - Now the real rounds score 63 / 54 / 22 / 25 / 0 m, with 55 / 53 / 23 / 23 / 0% in sync.
+     - Controls average 2.4 m (90th percentile 9 m, worst 11 m).
+     - The fifth round had one player's head turned about 37° from their camera all round, so their face barely registered. The game now warns about this.
+   - **Tried and rejected** (worse at the same false-positive rate): gating each player against their own range, per-family lags, ignoring small one-sided twitches, and correlating expression changes instead of levels.
+   - **Head-turn warning:** if a player's head stays turned more than 25° from their camera, the camera panel shows "Right: face your camera (head turned ~37°)". Tracking quality drops sharply off-axis.
 4. **Round** (`src/game/round.ts`): Jack climbs when smoothed sync is above 0.2, and slips while both players are still. `src/game/prompts.ts` holds the round script for tuning.
 5. **Recap** (`src/game/recap.ts`): time in sync, best streak, median lag, who led, leader-segment comparison, and best-matched expressions. Only measured numbers.
 

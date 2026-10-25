@@ -51,10 +51,10 @@ export const CHANNELS: ChannelDef[] = [
   // Brows, eyes and head pose carried little mirroring signal in real play
   // (they correlated about as well by chance), so they count for less. The
   // mouth channels separated real mirroring from chance best.
-  bs("browInnerUp", "surprise", ["browInnerUp"], 0.5),
-  bs("browOuterUp", "surprise", pair("browOuterUp"), 0.5),
+  bs("browInnerUp", "surprise", ["browInnerUp"], 0.25),
+  bs("browOuterUp", "surprise", pair("browOuterUp"), 0.25),
   bs("eyeWide", "surprise", pair("eyeWide")),
-  bs("browDown", "frown", pair("browDown"), 0.5),
+  bs("browDown", "frown", pair("browDown"), 0.25),
   bs("mouthFrown", "frown", pair("mouthFrown")),
   bs("noseSneer", "frown", pair("noseSneer")),
   bs("jawOpen", "jaw", ["jawOpen"]),
@@ -79,7 +79,7 @@ export const NUM_CHANNELS = CHANNELS.length;
 const HEAD_YAW = CHANNELS.findIndex((c) => c.name === "headYaw");
 
 /** Head angles in radians are divided by these so a big head move is about 1. */
-const YAW_SCALE = 0.5;
+export const YAW_SCALE = 0.5;
 const PITCH_SCALE = 0.4;
 const ROLL_SCALE = 0.4;
 

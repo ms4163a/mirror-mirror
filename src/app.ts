@@ -23,7 +23,7 @@ import { CameraSource, ReplaySource, SIM_MODES, SimSource, type FrameSource, typ
 import { RemoteLink, newRoomCode, type Seat } from "./remote/link";
 import type { RemoteMsg, ScreenName } from "./remote/protocol";
 import { FrameRecorder, type Recording } from "./replay/recording";
-import { NUM_CHANNELS } from "./signal/channels";
+import { CHANNELS, NUM_CHANNELS, YAW_SCALE } from "./signal/channels";
 import { ExpressionMeter } from "./signal/meter";
 import { SyncEngine, type SyncSnapshot } from "./sync/syncEngine";
 import { cameraErrorMessage, fillCameraPicker, rememberCamera } from "./tracking/camera";
@@ -82,6 +82,32 @@ const meters = [new ExpressionMeter(), new ExpressionMeter()] as const;
 function updateMeters() {
   for (const p of [0, 1] as const) meters[p].update(faces[p].present ? faces[p].channels : null);
   hud.updateSeen([meters[0].levels, meters[1].levels]);
+  updateFaceWarnings();
+}
+
+/**
+ * Tracking degrades badly when a face is turned away from its camera (in one
+ * playtest a player sat ~37 degrees off-axis all round and their brows and
+ * mouth barely registered). Warn while the smoothed head turn exceeds 25 degrees.
+ */
+const HEAD_YAW = CHANNELS.findIndex((c) => c.name === "headYaw");
+const yawDeg: [number, number] = [0, 0];
+function updateFaceWarnings() {
+  const notes: string[] = [];
+  for (const p of [0, 1] as const) {
+    const f = faces[p];
+    if (!f.present) {
+      yawDeg[p] *= 0.9;
+      continue;
+    }
+    const deg = (f.channels[HEAD_YAW] * YAW_SCALE * 180) / Math.PI;
+    yawDeg[p] += (deg - yawDeg[p]) * 0.15; // about 1 s to settle at 10 Hz
+    if (yawDeg[p] > 25) notes.push(`${p === 0 ? "Left" : "Right"}: face your camera (head turned ~${Math.round(yawDeg[p])}°)`);
+  }
+  const el = $("cam-warn");
+  const text = notes.join(" · ");
+  if (el.textContent !== text) el.textContent = text;
+  el.hidden = !text;
 }
 
 // Read-only debug handle for headless checks.
@@ -91,6 +117,9 @@ const debug = {
   get snap() { return snap; },
   get recap() { return recap; },
   get recording() { return recording; },
+  get faceWarning() { return $("cam-warn").hidden ? "" : $("cam-warn").textContent; },
+  get yaw() { return yawDeg.map((d) => Math.round(d)); },
+  get present() { return faces.map((f) => f.present); },
   get remote() { return link && { seat: link.seat, ready: link.ready, peer: link.peerConnected, rtt: link.clock.rtt, presence }; },
   start: () => startGame(),
 };

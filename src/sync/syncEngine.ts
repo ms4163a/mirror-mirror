@@ -48,20 +48,26 @@ export interface SyncOptions {
   matchBy: "channel" | "family";
 }
 
-// Tuned on three real two-person rounds (2026-10-25) against the same rounds with
-// one player time-shifted (real faces, no mirroring). Real expressions are slow,
-// so 4 s windows correlated by chance almost as well as real mirroring did; 8 s
-// windows with a 1.5 s reaction lag separate them. Matching by expression family
-// (not blendshape by blendshape) lets a smile one camera reads as "corners up"
-// match a smile another reads as "dimples + pressed lips". Real rounds:
-// 42 / 36 / 22 m; shifted controls at most 8.5 / 4.8 / 3.6 m.
+// Tuned on five real two-person rounds (2026-10-25). Each candidate setting was
+// compared against 30 controls: the same rounds with one player time-shifted
+// (real faces, no mirroring), at a matched false-positive rate. Findings:
+// - Real expressions are slow, so short windows correlate by chance almost as
+//   well as real mirroring; 10 s windows with a 1.5 s reaction lag separate them
+//   best while still responding within a few seconds.
+// - Matching by expression family lets a smile one camera reads as "corners up"
+//   match a smile another reads as "dimples + pressed lips".
+// - Tried and rejected (worse at the same false-positive rate): gating relative
+//   to each player's own range, per-family lags, ignoring small one-sided
+//   twitches, and correlating expression changes instead of levels.
+// Result: real rounds 62 / 53 / 22 / 25 / 0 m (the last had one player's head
+// turned ~37 degrees from the camera); controls average 2.3 m, 90th pct 8.7 m.
 export const DEFAULT_SYNC_OPTIONS: SyncOptions = {
   rateHz: 30,
-  windowMs: 8000,
+  windowMs: 10000,
   maxLagMs: 1500,
   leaderDeadZoneMs: 80,
   chanceR: 0.3,
-  fullR: 0.55,
+  fullR: 0.48,
   lagPenalty: 0.25,
   fullActivity: 2,
   minPresence: 0.8,
