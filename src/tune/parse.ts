@@ -12,6 +12,8 @@ export interface LoadedRound {
 const isObject = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x);
 const isNum = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
 const isVec = (x: unknown) => x === null || (Array.isArray(x) && x.every(isNum));
+/** A player's slot in a frame: absent (no sample this frame, as in remote play), null (face missing) or a vector. */
+const isSlot = (x: unknown) => x === undefined || isVec(x);
 
 /** Throws a message a human can act on if `x` isn't a usable recording. */
 export function assertRecording(x: unknown): asserts x is Recording {
@@ -25,7 +27,9 @@ export function assertRecording(x: unknown): asserts x is Recording {
   if (!Array.isArray(x.frames) || x.frames.length === 0) throw new Error("Recording has no frames");
   const width = x.channels.length;
   for (const f of x.frames) {
-    if (!isObject(f) || !isNum(f.t) || !isVec(f.a) || !isVec(f.b)) throw new Error("Recording has a malformed frame");
+    if (!isObject(f) || !isNum(f.t) || !isSlot(f.a) || !isSlot(f.b)) throw new Error("Recording has a malformed frame");
+    // Remote games record one player per frame, so either side may be absent, but not both.
+    if (f.a === undefined && f.b === undefined) throw new Error("Recording has a frame with no player data");
     for (const v of [f.a, f.b]) if (Array.isArray(v) && v.length !== width) throw new Error("Recording frame has the wrong width");
   }
 }

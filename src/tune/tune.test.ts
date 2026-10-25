@@ -87,6 +87,34 @@ describe("assertRecording", () => {
     expect(() => assertRecording(recording())).not.toThrow();
   });
 
+  // Remote games record one player per frame: the other slot is absent, not null.
+  const split = (frames: object[]) => recording({ frames: frames as unknown as Recording["frames"] });
+
+  it("accepts a split recording where each frame carries one player", () => {
+    const rec = split([{ t: 0, a: vec(0) }, { t: 10, b: vec(0.1) }, { t: 20, a: null }, { t: 30, b: null }]);
+    expect(() => assertRecording(rec)).not.toThrow();
+    expect(parseRoundFile("remote.json", JSON.stringify(rec)).recording.frames).toHaveLength(4);
+  });
+
+  it("accepts a mix of split and full frames", () => {
+    expect(() => assertRecording(split([{ t: 0, a: vec(0), b: vec(0) }, { t: 10, a: vec(0.1) }]))).not.toThrow();
+  });
+
+  it("still rejects a frame with no player data at all", () => {
+    expect(() => assertRecording(split([{ t: 0, a: vec(0) }, { t: 10 }]))).toThrow(/no player data/);
+    expect(() => parseRoundFile("empty.json", JSON.stringify(split([{ t: 5 }])))).toThrow(/empty\.json: .*no player data/);
+  });
+
+  it("keeps the width check for whichever side is present", () => {
+    expect(() => assertRecording(split([{ t: 0, b: [0, 0] }]))).toThrow(/wrong width/);
+    expect(() => assertRecording(split([{ t: 0, a: [0] }]))).toThrow(/wrong width/);
+  });
+
+  it("rejects a present but malformed slot in a split frame", () => {
+    expect(() => assertRecording(split([{ t: 0, a: "x" }]))).toThrow(/malformed frame/);
+    expect(() => assertRecording(split([{ t: 0, b: [NaN] }]))).toThrow(/malformed frame/);
+  });
+
   it("rejects empty frames, bad length, bad marks and ragged frames", () => {
     expect(() => assertRecording(recording({ frames: [] }))).toThrow(/no frames/);
     expect(() => assertRecording(recording({ roundMs: 0 }))).toThrow(/round length/);
