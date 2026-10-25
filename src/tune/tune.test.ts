@@ -166,6 +166,37 @@ describe("settings", () => {
     }
   });
 
+  it("has a slider for every setting in the tuner's sync group, and no extras", () => {
+    const keys = Object.keys(defaultSettings().sync).sort();
+    const sliders = KNOBS.filter((k) => k.group === "sync").map((k) => k.key).sort();
+    expect(sliders).toEqual(keys);
+  });
+
+  it("covers the scoring settings added after real-face tuning", () => {
+    const d = defaultSettings();
+    for (const key of ["fullR", "lagPenalty", "oneSidedPenalty", "calibrationCap", "gateHi"]) {
+      expect(d.sync).toHaveProperty(key);
+      expect(KNOBS.some((k) => k.key === key && k.group === "sync")).toBe(true);
+    }
+    expect(d.sync.fullR).toBe(DEFAULT_SYNC_OPTIONS.fullR);
+    expect(d.sync.oneSidedPenalty).toBe(DEFAULT_SYNC_OPTIONS.oneSidedPenalty);
+  });
+
+  it("passes the new settings through to rescore and marks them changed", () => {
+    const s = withKnob(withKnob(defaultSettings(), knob("fullR"), 0.8), knob("gateHi"), 2.5);
+    expect(changedKnobs(s).map((k) => k.key)).toEqual(["fullR", "gateHi"]);
+    const opts = toRescoreOpts(s);
+    expect(opts.sync.fullR).toBe(0.8);
+    expect(opts.sync.gateHi).toBe(2.5);
+    expect(opts.sync.lagPenalty).toBe(DEFAULT_SYNC_OPTIONS.lagPenalty);
+  });
+
+  it("keeps the long window and lag the real-face defaults need inside the sliders", () => {
+    expect(knob("windowMs").max).toBeGreaterThanOrEqual(DEFAULT_SYNC_OPTIONS.windowMs);
+    expect(knob("maxLagMs").max).toBeGreaterThanOrEqual(DEFAULT_SYNC_OPTIONS.maxLagMs);
+    expect(settingsFromJson(settingsToJson(defaultSettings()))).toEqual(defaultSettings());
+  });
+
   it("withKnob sets one value without mutating the original", () => {
     const d = defaultSettings();
     const s = withKnob(d, knob("maxClimb"), 4);

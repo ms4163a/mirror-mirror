@@ -3,7 +3,17 @@
 import { DEFAULT_CLIMB, type ClimbTuning } from "../game/round";
 import { DEFAULT_SYNC_OPTIONS, type SyncOptions } from "../sync/syncEngine";
 
-export type SyncKnob = "chanceR" | "fullActivity" | "windowMs" | "maxLagMs" | "leaderDeadZoneMs";
+export type SyncKnob =
+  | "chanceR"
+  | "fullR"
+  | "fullActivity"
+  | "windowMs"
+  | "maxLagMs"
+  | "lagPenalty"
+  | "leaderDeadZoneMs"
+  | "oneSidedPenalty"
+  | "calibrationCap"
+  | "gateHi";
 
 export interface TuneSettings {
   sync: Pick<SyncOptions, SyncKnob>;
@@ -23,18 +33,28 @@ export interface KnobSpec {
 
 export const KNOBS: KnobSpec[] = [
   { group: "sync", key: "chanceR", label: "Chance level", hint: "Correlation unrelated movement reaches; maps to sync 0", min: 0, max: 0.6, step: 0.01, unit: "" },
+  { group: "sync", key: "fullR", label: "Full-sync correlation", hint: "Correlation that counts as excellent mirroring; maps to sync 1", min: 0.3, max: 1, step: 0.01, unit: "" },
   { group: "sync", key: "fullActivity", label: "Full activity", hint: "How much both players must move for full credit", min: 0.5, max: 4, step: 0.1, unit: "" },
-  { group: "sync", key: "windowMs", label: "Window", hint: "Length of the comparison window", min: 2000, max: 6000, step: 100, unit: "ms" },
-  { group: "sync", key: "maxLagMs", label: "Max lag", hint: "Largest follow delay searched", min: 500, max: 1500, step: 50, unit: "ms" },
+  { group: "sync", key: "windowMs", label: "Window", hint: "Length of the comparison window", min: 2000, max: 12000, step: 100, unit: "ms" },
+  { group: "sync", key: "maxLagMs", label: "Max lag", hint: "Largest follow delay searched", min: 500, max: 2500, step: 50, unit: "ms" },
+  { group: "sync", key: "lagPenalty", label: "Lag penalty", hint: "Sync lost at the maximum lag (following still counts as mirroring)", min: 0, max: 0.6, step: 0.01, unit: "" },
   { group: "sync", key: "leaderDeadZoneMs", label: "Leader dead zone", hint: "Lag below this counts as unison", min: 0, max: 200, step: 5, unit: "ms" },
+  { group: "sync", key: "oneSidedPenalty", label: "One-sided penalty", hint: "How much a face only one player makes counts against the score", min: 0, max: 1, step: 0.05, unit: "" },
+  { group: "sync", key: "calibrationCap", label: "Calibration cap", hint: "Most a calibration can raise a channel's moving threshold (x default)", min: 1, max: 3, step: 0.1, unit: "x" },
+  { group: "sync", key: "gateHi", label: "Gate width", hint: "A channel counts as fully moving at this multiple of its threshold", min: 1.1, max: 3, step: 0.1, unit: "x" },
   { group: "climb", key: "syncThreshold", label: "Climb threshold", hint: "Sync below this does not move Jack", min: 0, max: 0.6, step: 0.01, unit: "" },
   { group: "climb", key: "maxClimb", label: "Max climb", hint: "Climb speed at sync = 1", min: 0.5, max: 6, step: 0.1, unit: "m/s" },
   { group: "climb", key: "stillSlip", label: "Still slip", hint: "Slip speed while both players are still", min: 0, max: 2, step: 0.05, unit: "m/s" },
 ];
 
+
 export function defaultSettings(): TuneSettings {
-  const { chanceR, fullActivity, windowMs, maxLagMs, leaderDeadZoneMs } = DEFAULT_SYNC_OPTIONS;
-  return { sync: { chanceR, fullActivity, windowMs, maxLagMs, leaderDeadZoneMs }, climb: { ...DEFAULT_CLIMB } };
+  const { chanceR, fullR, fullActivity, windowMs, maxLagMs, lagPenalty, leaderDeadZoneMs, oneSidedPenalty, calibrationCap, gateHi } =
+    DEFAULT_SYNC_OPTIONS;
+  return {
+    sync: { chanceR, fullR, fullActivity, windowMs, maxLagMs, lagPenalty, leaderDeadZoneMs, oneSidedPenalty, calibrationCap, gateHi },
+    climb: { ...DEFAULT_CLIMB },
+  };
 }
 
 export function cloneSettings(s: TuneSettings): TuneSettings {
