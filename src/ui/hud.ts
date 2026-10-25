@@ -120,7 +120,7 @@ export class Hud {
     // Brows are drawn as angled lines: the inner end drops (and the outer end lifts)
     // for an angry scowl, and the inner end rises for a worried/surprised look.
     const lift = (v("browInnerUp") + v("browOuterUp")) * r * 0.2;
-    const angry = Math.min(1, Math.max(0, v("browDown") - 0.08) / 0.4); // ignore slight readings; full tilt at a strong scowl
+    const angry = this.angryLevel(i, v("browDown"));
     const innerDrop = angry * r * 0.14 - v("browInnerUp") * r * 0.12;
     const outerLift = angry * r * 0.04 + v("browOuterUp") * r * 0.05;
     for (const s of [-1, 1]) {
@@ -148,6 +148,26 @@ export class Hud {
     for (const [id, row] of this.famRows) {
       for (const p of [0, 1] as const) row.seen[p].style.width = `${Math.round(levels[p][id as Family] * 100)}%`;
     }
+  }
+
+  // Per-player brow scaling for the cartoon faces: some faces only ever read a
+  // small browDown, so tilt relative to that player's own resting level and
+  // observed range, with a dead zone and smoothing so a neutral face stays still.
+  private readonly browRest = [NaN, NaN];
+  private readonly browPeak = [0, 0];
+  private readonly browShown = [0, 0];
+
+  private angryLevel(p: number, v: number): number {
+    if (Number.isNaN(this.browRest[p])) this.browRest[p] = v;
+    // Resting level follows drops at once and rises only slowly (about 15 s).
+    this.browRest[p] = v < this.browRest[p] ? v : this.browRest[p] + (v - this.browRest[p]) * 0.002;
+    // Peak follows rises at once and decays slowly toward rest.
+    this.browPeak[p] = Math.max(v, this.browRest[p] + (this.browPeak[p] - this.browRest[p]) * 0.999);
+    const span = Math.max(0.12, this.browPeak[p] - this.browRest[p]);
+    const level = Math.max(0, Math.min(1, (v - this.browRest[p]) / span));
+    const target = Math.max(0, (level - 0.25) / 0.75); // dead zone for jitter
+    this.browShown[p] += (target - this.browShown[p]) * 0.2;
+    return this.browShown[p];
   }
 
   update(snap: SyncSnapshot | null, displaySync: number) {

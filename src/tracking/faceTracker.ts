@@ -85,9 +85,10 @@ export class FaceTracker {
   private lastVideoTime = -1;
   private lastTs = -1;
   private readonly assigner = new PlayerAssigner();
-  // ?brows=blend turns off the geometric angry-brow measurement (blendshape only).
+  // ?brows=geo turns on the experimental geometric angry-brow measurement. It is
+  // off by default: it works on the 2D image, so head nods and tilts read as scowls.
   private readonly mappers = (() => {
-    const browGeometry = new URLSearchParams(location.search).get("brows") !== "blend";
+    const browGeometry = new URLSearchParams(location.search).get("brows") === "geo";
     return [new ChannelMapper({ browGeometry }), new ChannelMapper({ browGeometry })];
   })();
   // Smooths webcam jitter per player (see signal/oneEuro.ts). Disable with ?filter=off.

@@ -150,7 +150,7 @@ npm start            # build, then serve the app + API from one Node process (po
 | `?sim=mirror\|swap\|unison\|independent\|still\|solo` | simulated players, no camera (for testing) |
 | `?replay=<url>` | replay a saved round (put files in `public/bench/`) |
 | `?filter=off` | no jitter smoothing |
-| `?brows=blend` | angry-brow detection from the blendshape only (no geometry) |
+| `?brows=geo` | experimental geometric angry-brow measurement (sensitive to head angle) |
 | `?api=http://host:8787` | use a different leaderboard server |
 
 **Recording rounds for tuning:** "Download round data" on the recap saves the recap plus the raw face data. Load the files in `/tune.html`, or replay them with `?replay=`.
@@ -163,7 +163,6 @@ npm start            # build, then serve the app + API from one Node process (po
 2. **Channels:** these become 21 expression channels.
    - Left/right sides are averaged, so mirroring and copying score the same.
    - A One Euro filter removes webcam jitter.
-   - Angry brows are also measured geometrically from the face mesh, because the browDown blendshape is weak for some faces.
 3. **Sync engine** (`src/sync/syncEngine.ts`): every 100 ms, it correlates the two players over a 10-second window at lags of up to ±1.5 s (human reaction time).
    - Channels are grouped into expression families (smile, frown, mouth open, …). Each player's family signal is relative to their own range, so a smile that one camera reads as "mouth corners up" matches one another camera reads as "dimples and pressed lips".
    - The peak correlation gives **sync**. Its timing gives **lag** and **who led**.
@@ -188,7 +187,7 @@ npm start            # build, then serve the app + API from one Node process (po
 - 138 automated tests.
 
 **New, with limited testing:**
-- **Angry-brow geometry:** measures brow drop, angle and furrow from the face mesh, with sensitivity that adapts to each player's tracking noise. It's unit-tested, but not yet confirmed on real faces, because saved rounds don't store the face mesh. Add `?brows=blend` to fall back to the blendshape-only signal.
+- **Angry brows:** MediaPipe's brow-down reading is weak for some faces. The cartoon faces scale it to each player's own range, so a scowl still shows. An experimental geometric measurement from the face mesh exists (`?brows=geo`), but it's off by default: it works on the flat 2D image, so head nods and tilts read as scowls.
 - **Practice against a bot:** the bot logic is unit-tested, but it hasn't been played live much yet.
 
 **Not built:**
