@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mirror, Mirror — sync tuner</title>
+    <link rel="stylesheet" href="/src/tune/tune.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Mirror, Mirror <span>· sync tuner</span></h1>
+      <div id="status" role="status" aria-live="polite">Load round files to begin</div>
+    </header>
+    <main>
+      <aside id="controls">
+        <label id="drop" tabindex="0">
+          <input id="file" type="file" accept=".json,application/json" multiple />
+          <b>Drop round files here</b>
+          <span>or click to choose. Use "Download round data" from the recap screen.</span>
+        </label>
+        <ul id="errors" aria-live="polite"></ul>
+        <div id="knobs"></div>
+        <div class="actions">
+          <button id="reset" type="button">Reset to defaults</button>
+          <button id="copy" type="button" class="primary">Copy settings</button>
+        </div>
+        <textarea id="json" readonly rows="9" aria-label="Current settings as JSON" spellcheck="false"></textarea>
+        <p class="fine" id="copy-note">Send the copied JSON to Claude A to change the defaults.</p>
+      </aside>
+      <section id="results">
+        <p id="empty">No rounds loaded yet. Drop one or more round files on the left.</p>
+        <div id="table-wrap"></div>
+        <div id="charts"></div>
+      </section>
+    </main>
+    <script type="module" src="/src/tune/main.ts"></script>
+  </body>
+</html>

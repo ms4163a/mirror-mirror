@@ -75,6 +75,8 @@ body {
   overflow-y: auto;
   border-left: 1px solid var(--grid);
 }
+/* On short screens scroll the column rather than squashing the camera preview. */
+#side > * { flex-shrink: 0; }
 
 #cam { position: relative; border-radius: 10px; overflow: hidden; background: #000; aspect-ratio: 16 / 9; }
 #video, #cam-overlay {
@@ -127,7 +129,9 @@ body {
   overflow-y: auto;
   padding: 28px 32px;
   border-radius: 18px;
-  background: rgba(18, 19, 26, 0.92);
+  /* Nearly opaque plus a blur, so Jack and the stalk don't show through the text. */
+  background: rgba(18, 19, 26, 0.96);
+  backdrop-filter: blur(8px);
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.45);
 }
 .panel.wide { width: min(760px, calc(100% - 32px)); }
@@ -155,7 +159,19 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 button:disabled { opacity: 0.45; cursor: not-allowed; }
 kbd { font: 11px ui-monospace, monospace; padding: 1px 5px; border-radius: 4px; background: rgba(0, 0, 0, 0.18); margin-left: 6px; }
 
-#screen-countdown { font-size: 160px; font-weight: 900; text-shadow: 0 6px 30px rgba(0, 0, 0, 0.5); }
+#screen-countdown {
+  display: grid;
+  place-items: center;
+  width: 1.5em;
+  height: 1.5em;
+  border-radius: 50%;
+  background: rgba(18, 19, 26, 0.6);
+  font-size: 140px;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 6px 30px rgba(0, 0, 0, 0.5);
+}
+#screen-countdown[hidden] { display: none; }
 
 /* --- recap --------------------------------------------------------------- */
 .recap .big { color: var(--accent); }
@@ -187,7 +203,29 @@ kbd { font: 11px ui-monospace, monospace; padding: 1px 5px; border-radius: 4px; 
 .best li span:first-child { display: inline-block; min-width: 110px; }
 .best li b { display: inline-block; min-width: 48px; }
 .disclaimer { margin: 18px 0 12px; color: var(--muted); font-size: 13px; }
+/* Keep the buttons reachable when the recap is taller than the screen. */
+.recap .actions {
+  position: sticky;
+  bottom: 0;
+  margin: 0 -32px;
+  padding: 12px 32px 4px;
+  background: linear-gradient(to bottom, rgba(18, 19, 26, 0), rgba(18, 19, 26, 0.98) 35%);
+}
 .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* The recap panel covers the height counter, and its number can differ from the
+   recap by a sample. Hide it while the recap is up. */
+#stage:has(#screen-recap:not([hidden])) #height { visibility: hidden; }
+
+/* Short laptop screens: tighten the recap so it fits without scrolling. */
+@media (max-height: 820px) {
+  .panel { padding: 20px 24px; }
+  .recap .actions { margin: 0 -24px; padding: 10px 24px 0; }
+  .panel h3 { margin: 12px 0 6px; }
+  .tile { padding: 8px 10px; }
+  .sync-chart { height: 130px; }
+  .disclaimer { margin: 12px 0 10px; }
+}
 
 @media (max-width: 800px) {
   #app { grid-template-columns: 1fr; grid-template-rows: 55vh auto; overflow-y: auto; }

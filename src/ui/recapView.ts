@@ -1,6 +1,6 @@
 // Recap screen: what happened in the round, using measured numbers only. The
 // framing is feedback on one round of a game, never a verdict on the pair.
-import { ROUND_SCRIPT } from "../game/prompts";
+import { ROUND_SCRIPT, scriptTime } from "../game/prompts";
 import { IN_SYNC, type Recap } from "../game/recap";
 import type { RoundSample } from "../game/round";
 import { MILESTONES } from "./scene";
@@ -69,6 +69,15 @@ function leadBar(r: Recap) {
     <div class="legend">${segs.map((s) => `<span><i class="sw seg-${s.cls}"></i>${s.k} <b>${pct(s.v)}</b></span>`).join("")}</div>`;
 }
 
+/** Shortens `text` with an ellipsis until it fits `maxW`, so narrow bands don't cut a word in half. */
+function ellipsize(ctx: CanvasRenderingContext2D, text: string, maxW: number) {
+  if (maxW <= 0) return "";
+  if (ctx.measureText(text).width <= maxW) return text;
+  let s = text;
+  while (s.length > 1 && ctx.measureText(`${s}…`).width > maxW) s = s.slice(0, -1);
+  return s.length > 1 ? `${s.trimEnd()}…` : "";
+}
+
 function drawSyncChart(wrap: HTMLElement, samples: RoundSample[], durationMs: number) {
   const canvas = wrap.querySelector("canvas")!;
   const tip = wrap.querySelector<HTMLElement>(".tip")!;
@@ -92,9 +101,11 @@ function drawSyncChart(wrap: HTMLElement, samples: RoundSample[], durationMs: nu
     ctx.font = `${11 * dpr}px system-ui, sans-serif`;
     // Prompt segments as alternating bands, leader segments tinted.
     ROUND_SCRIPT.forEach((card, i) => {
-      if (card.at >= durationMs) return;
-      const end = Math.min(ROUND_SCRIPT[i + 1]?.at ?? durationMs, durationMs);
-      const x0 = xOf(card.at);
+      const start = scriptTime(card.at, durationMs);
+      if (start >= durationMs) return;
+      const next = ROUND_SCRIPT[i + 1];
+      const end = Math.min(next ? scriptTime(next.at, durationMs) : durationMs, durationMs);
+      const x0 = xOf(start);
       const x1 = xOf(end);
       ctx.fillStyle =
         card.lead === "left" ? `${PLAYER_COLORS[0]}22` : card.lead === "right" ? `${PLAYER_COLORS[1]}22` : i % 2 ? v("--grid") : "transparent";
@@ -102,12 +113,7 @@ function drawSyncChart(wrap: HTMLElement, samples: RoundSample[], durationMs: nu
       ctx.fillStyle = v("--muted");
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(x0, 0, x1 - x0 - 4 * dpr, pad.t);
-      ctx.clip();
-      ctx.fillText(card.title, x0 + 3 * dpr, pad.t - 6 * dpr);
-      ctx.restore();
+      ctx.fillText(ellipsize(ctx, card.title, x1 - x0 - 8 * dpr), x0 + 3 * dpr, pad.t - 6 * dpr);
     });
 
     // Axis + in-sync threshold
