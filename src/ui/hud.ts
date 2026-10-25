@@ -2,7 +2,9 @@
 // indicator, lag graph and per-expression breakdown. They show the measurements
 // directly, so the game doesn't read as a face filter.
 import { FaceLandmarker } from "@mediapipe/tasks-vision";
-import { CHANNELS, FAMILIES } from "../signal/channels";
+import { CHANNELS, FAMILIES, type Family } from "../signal/channels";
+import type { FamilyLevels } from "../signal/meter";
+import "./hud.css";
 import type { SyncSnapshot } from "../sync/syncEngine";
 import type { TrackerFrame } from "../tracking/faceTracker";
 
@@ -31,7 +33,7 @@ function cssVar(name: string) {
 
 export class Hud {
   private readonly lagHist: { t: number; lag: number; sync: number; active: boolean }[] = [];
-  private readonly famRows = new Map<string, { bar: HTMLElement; val: HTMLElement; row: HTMLElement }>();
+  private readonly famRows = new Map<string, { bar: HTMLElement; val: HTMLElement; row: HTMLElement; seen: [HTMLElement, HTMLElement] }>();
   private readonly camCtx: CanvasRenderingContext2D;
   private readonly lagCtx: CanvasRenderingContext2D;
 
@@ -47,15 +49,23 @@ export class Hud {
   ) {
     this.camCtx = el.camOverlay.getContext("2d")!;
     this.lagCtx = el.lagGraph.getContext("2d")!;
+    const legend = document.createElement("div");
+    legend.className = "fam-legend";
+    legend.innerHTML = `<span></span><span title="How strongly the camera reads it on each of you">seen <b class="p0">L</b> <b class="p1">R</b></span><span>match</span><span></span>`;
+    el.families.appendChild(legend);
     for (const f of FAMILIES) {
+      // A family with no weighted channels (blinks only) can never score, so don't show it.
+      if (!CHANNELS.some((c) => c.family === f.id && c.weight > 0)) continue;
       const row = document.createElement("div");
       row.className = "fam";
-      row.innerHTML = `<span class="fam-label">${f.label}</span><span class="fam-track"><span class="fam-bar"></span></span><span class="fam-val">–</span>`;
+      row.innerHTML = `<span class="fam-label">${f.label}</span><span class="fam-seen"><span><i></i></span><span><i></i></span></span><span class="fam-track"><span class="fam-bar"></span></span><span class="fam-val">–</span>`;
       el.families.appendChild(row);
+      const seen = row.querySelectorAll<HTMLElement>(".fam-seen i");
       this.famRows.set(f.id, {
         row,
         bar: row.querySelector(".fam-bar")!,
         val: row.querySelector(".fam-val")!,
+        seen: [seen[0], seen[1]],
       });
     }
   }
@@ -128,6 +138,13 @@ export class Hud {
     ctx.restore();
   }
 
+  /** Live per-player expression levels (what the camera reads), updated every frame batch. */
+  updateSeen(levels: [FamilyLevels, FamilyLevels]) {
+    for (const [id, row] of this.famRows) {
+      for (const p of [0, 1] as const) row.seen[p].style.width = `${Math.round(levels[p][id as Family] * 100)}%`;
+    }
+  }
+
   update(snap: SyncSnapshot | null, displaySync: number) {
     const pct = Math.round(displaySync * 100);
     this.el.syncValue.textContent = `${pct}%`;
@@ -138,7 +155,8 @@ export class Hud {
       this.lagHist.push({ t: snap.t, lag: snap.lagMs, sync: snap.sync, active: snap.active && snap.sync > 0 });
       while (this.lagHist.length && this.lagHist[0].t < snap.t - LAG_WINDOW_MS) this.lagHist.shift();
       for (const f of snap.families) {
-        const row = this.famRows.get(f.family)!;
+        const row = this.famRows.get(f.family);
+        if (!row) continue;
         const used = f.score !== null;
         row.row.classList.toggle("unused", !used);
         row.bar.style.width = used ? `${Math.round(f.score! * 100)}%` : "0";

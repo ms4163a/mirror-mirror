@@ -1,0 +1,16 @@
+/* Expression panel: what the camera reads for each player (two thin bars) next to the match score. */
+.fam { grid-template-columns: 92px 48px 1fr 36px; }
+.fam-seen { display: grid; gap: 2px; }
+.fam-seen span { display: block; height: 4px; border-radius: 2px; background: var(--grid); overflow: hidden; }
+.fam-seen i { display: block; height: 100%; width: 0; border-radius: 2px; transition: width 0.12s linear; }
+.fam-seen span:first-child i { background: var(--p0); }
+.fam-seen span:last-child i { background: var(--p1); }
+.fam-legend {
+  display: grid;
+  grid-template-columns: 92px 48px 1fr 36px;
+  gap: 8px;
+  margin-bottom: 2px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.fam-legend span:nth-child(3) { text-align: left; }
