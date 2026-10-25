@@ -8,7 +8,8 @@ import { CHANNELS, FAMILIES, type Family } from "./channels";
 const FULL: Record<string, number> = {
   smile: 0.7, cheekSquint: 0.5, dimple: 0.3, mouthPress: 0.4, eyeSquint: 0.5,
   browInnerUp: 0.6, browOuterUp: 0.6, eyeWide: 0.4,
-  browDown: 0.6, mouthFrown: 0.5, noseSneer: 0.5,
+  // Lowered brows only reached ~0.3-0.5 in playtests, so a clear scowl is 0.35.
+  browDown: 0.35, mouthFrown: 0.5, noseSneer: 0.5,
   jawOpen: 0.5, mouthLowerDown: 0.6, mouthUpperUp: 0.5,
   mouthPucker: 0.7, mouthFunnel: 0.5, cheekPuff: 0.5, headYaw: 0.6,
 };

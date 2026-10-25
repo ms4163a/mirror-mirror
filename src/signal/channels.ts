@@ -54,7 +54,9 @@ export const CHANNELS: ChannelDef[] = [
   bs("browInnerUp", "surprise", ["browInnerUp"], 0.25),
   bs("browOuterUp", "surprise", pair("browOuterUp"), 0.25),
   bs("eyeWide", "surprise", pair("eyeWide")),
-  bs("browDown", "frown", pair("browDown"), 0.25),
+  // Lowered ("angry") brows DO carry mirroring signal, unlike raised brows:
+  // full weight scored better on the six real rounds at the same false-positive rate.
+  bs("browDown", "frown", pair("browDown")),
   bs("mouthFrown", "frown", pair("mouthFrown")),
   bs("noseSneer", "frown", pair("noseSneer")),
   bs("jawOpen", "jaw", ["jawOpen"]),
