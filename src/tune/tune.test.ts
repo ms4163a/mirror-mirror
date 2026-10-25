@@ -88,7 +88,7 @@ describe("assertRecording", () => {
   });
 
   // Remote games record one player per frame: the other slot is absent, not null.
-  const split = (frames: object[]) => recording({ frames: frames as unknown as Recording["frames"] });
+  const split = (frames: Recording["frames"]) => recording({ frames });
 
   it("accepts a split recording where each frame carries one player", () => {
     const rec = split([{ t: 0, a: vec(0) }, { t: 10, b: vec(0.1) }, { t: 20, a: null }, { t: 30, b: null }]);
@@ -111,7 +111,7 @@ describe("assertRecording", () => {
   });
 
   it("rejects a present but malformed slot in a split frame", () => {
-    expect(() => assertRecording(split([{ t: 0, a: "x" }]))).toThrow(/malformed frame/);
+    expect(() => assertRecording(split([{ t: 0, a: "x" as unknown as number[] }]))).toThrow(/malformed frame/);
     expect(() => assertRecording(split([{ t: 0, b: [NaN] }]))).toThrow(/malformed frame/);
   });
 
