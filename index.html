@@ -16,13 +16,17 @@
         <div id="screen">
           <div id="screen-lobby" class="panel" hidden>
             <h1>Mirror, Mirror</h1>
-            <p class="lede">Sit side by side and copy each other's faces. The better you mirror each other, the higher Jack climbs.</p>
+            <p class="lede" id="lobby-lede">Sit side by side and copy each other's faces. The better you mirror each other, the higher Jack climbs.</p>
             <ul class="checks">
               <li id="check-0"><i></i> <b class="p0">Left</b> player in view</li>
               <li id="check-1"><i></i> <b class="p1">Right</b> player in view</li>
             </ul>
+            <p id="camera-status" class="camera-status" role="status" hidden></p>
             <button id="start" class="primary" disabled>Start <kbd>Space</kbd></button>
-            <p class="fine">Everything runs on this computer. No video leaves the browser.</p>
+            <p class="fine" id="camera-row" hidden><label>Camera <select id="camera-select"></select></label></p>
+            <p id="remote-info" class="fine" hidden></p>
+            <p class="fine" id="privacy-note">Everything runs on this computer. No video leaves the browser.</p>
+            <p class="fine" id="remote-start">Playing on two computers? <a href="?remote=new">Start a remote game</a></p>
           </div>
           <div id="screen-calibrate" class="panel" hidden>
             <h2>Relax your faces</h2>

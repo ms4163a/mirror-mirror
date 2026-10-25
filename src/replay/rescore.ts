@@ -36,7 +36,10 @@ export function rescore(
       engine.endCalibration();
       calibrating = false;
     }
-    engine.push(f.t, f.a && Float64Array.from(f.a), f.b && Float64Array.from(f.b));
+    const vec = (x: number[] | null) => x && Float64Array.from(x);
+    if (f.a !== undefined && f.b !== undefined) engine.push(f.t, vec(f.a), vec(f.b));
+    else if (f.a !== undefined) engine.pushPlayer(0, f.t, vec(f.a));
+    else if (f.b !== undefined) engine.pushPlayer(1, f.t, vec(f.b));
     if (f.t < roundStart) continue;
 
     let snap = null;

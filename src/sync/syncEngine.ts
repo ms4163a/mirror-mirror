@@ -134,6 +134,11 @@ export class SyncEngine {
     this.history.push(t, a, b);
   }
 
+  /** One player's sample, for remote play where the two streams arrive separately. */
+  pushPlayer(player: 0 | 1, t: number, v: Float64Array | null) {
+    this.history.pushPlayer(player, t, v);
+  }
+
   /** Begins collecting a neutral-face baseline (players sit still, faces relaxed). */
   startCalibration() {
     this.calib = { start: this.history.count };

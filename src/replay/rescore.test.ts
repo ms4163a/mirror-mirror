@@ -69,3 +69,22 @@ describe("record + rescore", () => {
     expect(out.frames[0]).toEqual({ t: 50, a: Array(NUM_CHANNELS).fill(0.1235), b: null });
   });
 });
+
+describe("remote-play recordings", () => {
+  it("re-scores frames that carry one player each, like the joint version", () => {
+    const p = new Performer(9, CAL + ROUND + 1000);
+    const joint = record([{ source: p }, { source: p, delayMs: 200 }]);
+    // Split every joint frame into two single-player frames, the right one 1 ms later.
+    const split: Recording = {
+      ...joint,
+      frames: joint.frames.flatMap((f) => [
+        { t: f.t, a: f.a },
+        { t: f.t + 1, b: f.b },
+      ]),
+    };
+    const a = rescore(joint);
+    const b = rescore(split);
+    expect(Math.abs(a.height - b.height)).toBeLessThan(0.5);
+    expect(Math.abs((a.recap.medianLagMs ?? 0) - (b.recap.medianLagMs ?? 0))).toBeLessThan(40);
+  });
+});

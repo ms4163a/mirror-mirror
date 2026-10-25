@@ -38,12 +38,16 @@ export class SimSource implements FrameSource {
   private readonly start = performance.now();
   private lastEmit = -Infinity;
 
-  constructor(readonly mode: SimMode) {}
+  /** `timeBase` maps local time to a shared clock (remote tests), so two machines' sims line up. */
+  constructor(
+    readonly mode: SimMode,
+    private readonly timeBase?: (now: number) => number,
+  ) {}
 
   poll(now: number): TrackerFrame | null {
     if (now - this.lastEmit < 1000 / 30) return null;
     this.lastEmit = now;
-    const t = now - this.start;
+    const t = this.timeBase ? this.timeBase(now) % 3_600_000 : now - this.start;
     const lag = 300;
     let va: Float64Array | null;
     let vb: Float64Array | null;
@@ -86,6 +90,7 @@ export class ReplaySource implements FrameSource {
   readonly kind = "sim";
   private origin = NaN;
   private next = 0;
+  private last: [number[] | null, number[] | null] = [null, null];
 
   constructor(readonly rec: Recording) {
     checkRecording(rec);
@@ -94,6 +99,7 @@ export class ReplaySource implements FrameSource {
   restart(now: number) {
     this.origin = now;
     this.next = 0;
+    this.last = [null, null];
   }
 
   poll(now: number): TrackerFrame | null {
@@ -103,12 +109,15 @@ export class ReplaySource implements FrameSource {
     const f = frames[this.next];
     if (f.t > now - this.origin) return null;
     this.next++;
+    // A remote-play recording has one player per frame; the other holds its last sample.
+    if (f.a !== undefined) this.last[0] = f.a;
+    if (f.b !== undefined) this.last[1] = f.b;
     const player = (v: number[] | null): PlayerFrame => ({
       present: v !== null,
       channels: v ? Float64Array.from(v) : new Float64Array(NUM_CHANNELS),
       landmarks: null,
       blendshapes: null,
     });
-    return { t: this.origin + f.t, players: [player(f.a), player(f.b)] };
+    return { t: this.origin + f.t, players: [player(this.last[0]), player(this.last[1])] };
   }
 }

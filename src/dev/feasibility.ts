@@ -6,6 +6,7 @@
 //   ?bench=<image url>   benchmark without a camera: the image is drawn twice side
 //                        by side and fed to the tracker every animation frame
 import { FaceLandmarker, type FaceLandmarkerResult } from "@mediapipe/tasks-vision";
+import { cameraErrorMessage, openCamera } from "../tracking/camera";
 import { createLandmarker } from "../tracking/faceTracker";
 
 const params = new URLSearchParams(location.search);
@@ -49,12 +50,11 @@ async function initSource(): Promise<HTMLVideoElement | HTMLCanvasElement> {
     video.replaceWith(canvas);
     return canvas;
   }
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
-    audio: false,
+  const cam = await openCamera(video, {
+    prefer: params.get("camera"),
+    onSlow: () => setStatus("waiting for camera permission (check the address bar)"),
   });
-  video.srcObject = stream;
-  await video.play();
+  $("camera").textContent = cam.label || "?";
   return video;
 }
 
@@ -186,7 +186,7 @@ async function main() {
     requestAnimationFrame(tick);
   } catch (err) {
     console.error(err);
-    setStatus(`error: ${(err as Error).message}`);
+    setStatus(`error: ${cameraErrorMessage(err)}`);
   }
 }
 

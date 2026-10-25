@@ -14,13 +14,17 @@
     "server": "node server/index.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.server.json",
     "start": "npm run build && node server/index.ts --static dist",
-    "dev:all": "node scripts/setup-assets.mjs && node scripts/dev-all.mjs"
+    "dev:all": "node scripts/setup-assets.mjs && node scripts/dev-all.mjs",
+    "dev:https": "node scripts/setup-assets.mjs && node scripts/dev-all.mjs --https"
   },
   "dependencies": {
-    "@mediapipe/tasks-vision": "^1.1.1"
+    "@mediapipe/tasks-vision": "^1.1.1",
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "@types/ws": "^8.18.2",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
     "vitest": "^5.0.5"

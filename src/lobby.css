@@ -1,0 +1,20 @@
+/* Lobby additions owned by app.ts (camera status and picker, remote info). */
+.camera-status {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border-left: 3px solid #e0a020;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 14px;
+}
+#camera-row select {
+  margin-left: 6px;
+  max-width: 100%;
+  font: inherit;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--grid);
+  background: var(--bg);
+  color: var(--text);
+}

@@ -31,14 +31,7 @@ export async function createLandmarker(preferred?: Delegate): Promise<{ landmark
   throw new Error("Could not create FaceLandmarker with any delegate");
 }
 
-export async function openCamera(video: HTMLVideoElement) {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
-    audio: false,
-  });
-  video.srcObject = stream;
-  await video.play();
-}
+export { openCamera } from "./camera";
 
 export interface PlayerFrame {
   present: boolean;

@@ -2,14 +2,18 @@
 // engine on real faces offline: replay a session through the live game
 // (?replay=<url>) or re-score it with different settings (rescore.ts).
 import { CHANNELS } from "../signal/channels";
-import type { TrackerFrame } from "../tracking/faceTracker";
+import type { PlayerFrame, TrackerFrame } from "../tracking/faceTracker";
 
 export interface RecordedFrame {
   /** ms since the recording started */
   t: number;
-  /** Channel vectors, rounded to 4 decimals; null when the face was missing. */
-  a: number[] | null;
-  b: number[] | null;
+  /**
+   * Channel vectors, rounded to 4 decimals; null when the face was missing.
+   * Left out (undefined) when the frame carries only the other player's sample,
+   * which happens in remote play, where the two streams arrive separately.
+   */
+  a?: number[] | null;
+  b?: number[] | null;
 }
 
 export interface RecordingMarks {
@@ -53,6 +57,16 @@ export class FrameRecorder {
       a: a.present ? round4(a.channels) : null,
       b: b.present ? round4(b.channels) : null,
     });
+  }
+
+  /** One player's sample (remote play). `t` must be on the same clock as `begin()`. */
+  pushPlayer(player: 0 | 1, t: number, face: PlayerFrame) {
+    if (!this.active) return;
+    const v = face.present ? round4(face.channels) : null;
+    const f: RecordedFrame = { t: Math.round((t - this.start) * 10) / 10 };
+    if (player === 0) f.a = v;
+    else f.b = v;
+    this.frames.push(f);
   }
 
   mark(name: keyof RecordingMarks, now: number) {

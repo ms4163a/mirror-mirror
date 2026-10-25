@@ -9,15 +9,24 @@
 //   ?replay=<url>                                     replay a recorded session (from "Download round data")
 //   ?coach=off                                        skip the Llama coach's note
 //   ?api=http://host:8787                             leaderboard server (default: same origin /api)
+//   ?remote=new                                       start a remote game on two computers (you are Left)
+//   ?room=ABCD&seat=left|right                        join a remote game (the host shares this link)
+//   ?camera=<label text>                              prefer a camera whose name contains this text
+import "./lobby.css";
+import { ROUND_MS, ROUND_SCRIPT, promptAt } from "./game/prompts";
 import { computeRecap, type Recap } from "./game/recap";
-import { Round } from "./game/round";
+import { Round, type RoundSample } from "./game/round";
 import { cancelCoachNote, showCoachNote } from "./llm/coachView";
 import { flushQueue } from "./net/leaderboardClient";
 import { showSaveBox } from "./net/saveView";
 import { CameraSource, ReplaySource, SIM_MODES, SimSource, type FrameSource, type SimMode } from "./input/sources";
+import { RemoteLink, newRoomCode, type Seat } from "./remote/link";
+import type { RemoteMsg, ScreenName } from "./remote/protocol";
 import { FrameRecorder, type Recording } from "./replay/recording";
+import { NUM_CHANNELS } from "./signal/channels";
 import { SyncEngine, type SyncSnapshot } from "./sync/syncEngine";
-import { FaceTracker, createLandmarker, openCamera } from "./tracking/faceTracker";
+import { cameraErrorMessage, fillCameraPicker, rememberCamera } from "./tracking/camera";
+import { FaceTracker, createLandmarker, openCamera, type PlayerFrame, type TrackerFrame } from "./tracking/faceTracker";
 import { Hud } from "./ui/hud";
 import { renderRecap } from "./ui/recapView";
 import { Scene } from "./ui/scene";
@@ -29,8 +38,6 @@ const CALIBRATE_MS = 4000;
 const COUNTDOWN_MS = 3000;
 const SNAPSHOT_EVERY_MS = 100;
 let roundMs = Number(params.get("roundMs")) || undefined;
-
-type ScreenName = "lobby" | "calibrate" | "countdown" | "round" | "recap" | "error";
 
 const video = $<HTMLVideoElement>("video");
 const scene = new Scene($<HTMLCanvasElement>("scene"));
@@ -57,6 +64,19 @@ let lastPromptIndex = -1;
 const recorder = new FrameRecorder();
 let recording: Recording | null = null;
 
+// --- remote play -----------------------------------------------------------
+// Two computers, one player each. The host (Left) runs the engine and the round
+// and streams state to the guest (Right). Only face-channel numbers travel.
+let link: RemoteLink | null = null;
+const absentFace = (): PlayerFrame => ({ present: false, channels: new Float64Array(NUM_CHANNELS), landmarks: null, blendshapes: null });
+/** Latest face of each player (screen left, screen right), for the avatars. */
+const faces: [PlayerFrame, PlayerFrame] = [absentFace(), absentFace()];
+let lastRemoteAt = -Infinity;
+/** Guest only: the newest state from the host. */
+let hostState: Extract<RemoteMsg, { type: "state" }> | null = null;
+let hostStateFresh = false;
+const isGuest = () => !!link && !link.isHost;
+
 // Read-only debug handle for headless checks.
 const debug = {
   get screen() { return screen; },
@@ -64,6 +84,7 @@ const debug = {
   get snap() { return snap; },
   get recap() { return recap; },
   get recording() { return recording; },
+  get remote() { return link && { seat: link.seat, ready: link.ready, peer: link.peerConnected, rtt: link.clock.rtt, presence }; },
   start: () => startGame(),
 };
 (window as unknown as { __mm: typeof debug }).__mm = debug;
@@ -77,6 +98,10 @@ function show(name: ScreenName) {
 }
 
 function startGame(force = false) {
+  if (isGuest()) {
+    link!.send({ type: "start" });
+    return;
+  }
   if (screen !== "lobby" && screen !== "recap") return;
   if (screen === "lobby" && !force && !(presence[0] && presence[1])) return;
   const now = performance.now();
@@ -107,11 +132,26 @@ function finishRound() {
   host.querySelector('[data-action="download"]')!.addEventListener("click", downloadRound);
   if (params.get("coach") !== "off") showCoachNote(host, recap);
   showSaveBox(host, recap, round.samples, source instanceof CameraSource ? "camera" : source instanceof ReplaySource ? "replay" : "sim");
+  link?.send({ type: "recap", recap, samples: round.samples });
+}
+
+/** Guest: shows the recap the host computed. */
+function showRemoteRecap(r: Recap, samples: RoundSample[]) {
+  recap = r;
+  const host = $("screen-recap");
+  show("recap");
+  renderRecap(host, r, samples);
+  host.querySelector('[data-action="again"]')!.addEventListener("click", () => startGame());
+  host.querySelector('[data-action="download"]')!.addEventListener("click", () => download({ recap: r, samples }));
 }
 
 function downloadRound() {
   if (!round || !recap) return;
-  const blob = new Blob([JSON.stringify({ recap, samples: round.samples, recording })], { type: "application/json" });
+  download({ recap, samples: round.samples, recording });
+}
+
+function download(data: unknown) {
+  const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `mirror-round-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
@@ -119,10 +159,9 @@ function downloadRound() {
   URL.revokeObjectURL(a.href);
 }
 
-function updatePrompt() {
-  if (!round) return;
-  // Round.prompt scales the 60 s script to the round's length (?roundMs=).
-  const { card, index } = round.prompt;
+function updatePrompt(elapsed: number, durationMs: number) {
+  // promptAt scales the 60 s script to the round's length (?roundMs=).
+  const { card, index } = promptAt(elapsed, ROUND_SCRIPT, durationMs);
   if (index !== lastPromptIndex) {
     lastPromptIndex = index;
     $("prompt-title").textContent = card.title;
@@ -132,8 +171,135 @@ function updatePrompt() {
     void el.offsetWidth; // restart the animation
     el.classList.add("pop");
   }
-  const left = Math.max(0, Math.ceil((round.durationMs - round.elapsed) / 1000));
+  const left = Math.max(0, Math.ceil((durationMs - elapsed) / 1000));
   $("timer").textContent = `0:${String(left).padStart(2, "0")}`;
+}
+
+/** In remote play each camera sees one player; sim test mode uses the seat's own column. */
+function ownFace(frame: TrackerFrame, seatIdx: 0 | 1): PlayerFrame {
+  if (source.kind === "sim") return frame.players[seatIdx];
+  return frame.players.find((p) => p.present) ?? frame.players[0];
+}
+
+const round4 = (x: number) => Math.round(x * 1e4) / 1e4;
+
+function onLocalRemoteFrame(frame: TrackerFrame, l: RemoteLink) {
+  const seatIdx = l.isHost ? 0 : 1;
+  const own = ownFace(frame, seatIdx);
+  faces[seatIdx] = own;
+  if (l.isHost) feedPlayer(0, frame.t, own);
+  // The guest waits for clock sync so its timestamps are on the host's clock.
+  if (l.ready) l.send({ type: "frame", t: l.toHost(frame.t), v: own.present ? Array.from(own.channels, round4) : null });
+  hud.drawCamera({ t: frame.t, players: faces }, 1280, 720, true);
+}
+
+function feedPlayer(p: 0 | 1, t: number, face: PlayerFrame) {
+  engine.pushPlayer(p, t, face.present ? face.channels : null);
+  recorder.pushPlayer(p, t, face);
+}
+
+/** Host: if the guest goes quiet, mark them absent so the engine keeps moving. */
+function hostKeepRemoteAlive(now: number) {
+  const fresh = now - lastRemoteAt < 1000;
+  presence = [faces[0].present, fresh && faces[1].present];
+  const stale = now - 500;
+  if (!fresh && !(engine.history.latest(1) >= stale)) feedPlayer(1, stale, absentFace());
+}
+
+function broadcastState(now: number) {
+  link!.send({
+    type: "state",
+    screen,
+    screenElapsed: now - screenStart,
+    snap,
+    sync: displaySync,
+    height: round?.height ?? 0,
+    roundElapsed: round?.elapsed ?? 0,
+    roundMs: round?.durationMs ?? roundMs ?? ROUND_MS,
+    presence,
+  });
+}
+
+function onRemoteMessage(msg: RemoteMsg) {
+  if (msg.type === "frame") {
+    const face: PlayerFrame = msg.v
+      ? { present: true, channels: Float64Array.from(msg.v), landmarks: null, blendshapes: null }
+      : absentFace();
+    if (link!.isHost) {
+      faces[1] = face;
+      lastRemoteAt = performance.now();
+      feedPlayer(1, msg.t, face);
+    } else {
+      faces[0] = face;
+    }
+  } else if (msg.type === "start" && link!.isHost) {
+    // (Guest side: a new game's first state, "calibrate", clears the old recap below.)
+    startGame();
+  } else if (msg.type === "state" && !link!.isHost) {
+    hostState = msg;
+    hostStateFresh = true;
+  } else if (msg.type === "recap" && !link!.isHost) {
+    // Forget the last state: it was sent before the recap and still says "round".
+    hostState = null;
+    showRemoteRecap(msg.recap, msg.samples);
+  }
+}
+
+/** Guest: mirror the host's screens, HUD and scene. */
+function guestTick(dt: number) {
+  const st = hostState;
+  if (st) {
+    // The recap screen is shown when its data arrives (showRemoteRecap), not from state alone.
+    if (st.screen !== screen && (st.screen !== "recap" || recap)) show(st.screen);
+    presence = st.presence;
+    if (st.screen !== "recap") recap = null;
+    switch (st.screen) {
+      case "lobby":
+        for (const i of [0, 1]) $(`check-${i}`).classList.toggle("ok", st.presence[i]);
+        $<HTMLButtonElement>("start").disabled = !(st.presence[0] && st.presence[1]);
+        break;
+      case "calibrate":
+        $("calib-bar").style.width = `${Math.min(100, (st.screenElapsed / CALIBRATE_MS) * 100)}%`;
+        break;
+      case "countdown":
+        $("countdown-num").textContent = String(Math.max(1, Math.ceil((COUNTDOWN_MS - st.screenElapsed) / 1000)));
+        break;
+      case "round":
+        updatePrompt(st.roundElapsed, st.roundMs);
+        break;
+    }
+    if (hostStateFresh) {
+      hostStateFresh = false;
+      snap = st.snap;
+      displaySync = st.sync;
+      hud.update(snap, displaySync);
+    }
+  }
+  const height = st?.height ?? 0;
+  $("height").textContent = `${height.toFixed(1)} m`;
+  scene.render(dt, { height, sync: displaySync, slipping: screen === "round" && !!snap && !snap.active && height > 0 });
+}
+
+function updateRemoteInfo(l: RemoteLink) {
+  const el = $("remote-info");
+  if (l.fatal) {
+    $("error-msg").textContent = l.fatal;
+    if (screen !== "error") show("error");
+    return;
+  }
+  const you = l.isHost ? "Left" : "Right";
+  const guestUrl = `${location.origin}${location.pathname}?room=${l.code}&seat=right`;
+  const status = !l.connected
+    ? "Connecting to the server…"
+    : !l.peerConnected
+      ? l.isHost
+        ? `Waiting for your partner. Send them this link: <b>${guestUrl}</b>`
+        : "Waiting for the host…"
+      : !l.ready
+        ? "Syncing clocks…"
+        : `Connected${l.isHost ? "" : ` · clock synced (±${Math.round(l.clock.rtt / 2)} ms)`}`;
+  const html = `Remote game · room <b>${l.code}</b> · you are <b>${you}</b><br>${status}`;
+  if (el.innerHTML !== html) el.innerHTML = html;
 }
 
 let lastFrameT = performance.now();
@@ -145,7 +311,9 @@ function tick(now: number) {
   lastFrameT = now;
 
   const frame = source.poll(now);
-  if (frame) {
+  if (frame && link) {
+    onLocalRemoteFrame(frame, link);
+  } else if (frame) {
     const [a, b] = frame.players;
     presence = [a.present, b.present];
     recorder.push(frame);
@@ -153,6 +321,13 @@ function tick(now: number) {
     const w = source.kind === "camera" ? video.videoWidth : 1280;
     const h = source.kind === "camera" ? video.videoHeight : 720;
     hud.drawCamera(frame, w, h, source.kind === "sim");
+  }
+  if (link?.isHost) hostKeepRemoteAlive(now);
+  if (link) updateRemoteInfo(link);
+
+  if (isGuest()) {
+    guestTick(dt);
+    return;
   }
 
   let fresh = false;
@@ -189,10 +364,11 @@ function tick(now: number) {
       if (!round) break;
       if (fresh && snap) round.record(snap);
       round.update(dt, snap);
-      updatePrompt();
+      updatePrompt(round.elapsed, round.durationMs);
       if (round.done) finishRound();
       break;
   }
+  if (fresh && link?.isHost) broadcastState(now);
 
   // During a round the meter shows the round's smoothed sync; otherwise ease toward the live value.
   const target = snap?.sync ?? 0;
@@ -208,8 +384,44 @@ function tick(now: number) {
   });
 }
 
+/** Lets players switch cameras from the lobby (e.g. away from a virtual camera). */
+async function setupCameraPicker(currentId: string) {
+  const select = $<HTMLSelectElement>("camera-select");
+  const count = await fillCameraPicker(select, currentId, async (id) => {
+    try {
+      const cam = await openCamera(video, { deviceId: id });
+      rememberCamera(cam.deviceId);
+    } catch (err) {
+      $("camera-status").hidden = false;
+      $("camera-status").textContent = cameraErrorMessage(err);
+    }
+  });
+  $("camera-row").hidden = count < 2;
+}
+
 async function init() {
   show("lobby");
+  if (params.get("remote") === "new") {
+    params.delete("remote");
+    params.set("room", newRoomCode());
+    params.set("seat", "left");
+    history.replaceState(null, "", `?${params}`);
+  }
+  const room = params.get("room")?.toUpperCase();
+  const seat = params.get("seat") as Seat | null;
+  if (room && /^[A-Z]{4}$/.test(room) && (seat === "left" || seat === "right")) {
+    link = new RemoteLink(room, seat);
+    link.onMessage(onRemoteMessage);
+    $("remote-info").hidden = false;
+    $("remote-start").hidden = true;
+    $("cam-note").hidden = false;
+    $("cam-note").textContent = `Remote · room ${room} · you are ${seat === "left" ? "Left" : "Right"}. Video stays on this computer.`;
+    video.style.visibility = "hidden"; // both players are shown as avatars
+    $("lobby-lede").textContent =
+      "You're on two computers. Copy each other's faces; the better you mirror each other, the higher Jack climbs.";
+    $("privacy-note").textContent =
+      "Video never leaves your computer. Only face measurements (numbers) are sent to your partner.";
+  }
   const sim = params.get("sim") as SimMode | null;
   try {
     const replayUrl = params.get("replay");
@@ -222,12 +434,23 @@ async function init() {
       $("cam-note").hidden = false;
       $("cam-note").textContent = `Replaying ${replayUrl.split("/").pop()}`;
     } else if (sim && SIM_MODES.includes(sim)) {
-      source = new SimSource(sim);
+      // In a remote test, both sims follow the host's clock so they line up across machines.
+      source = new SimSource(sim, link ? (now) => link!.toHost(now) : undefined);
       $("cam-note").hidden = false;
-      $("cam-note").textContent = `Simulated players: ${sim}`;
+      if (!link) $("cam-note").textContent = `Simulated players: ${sim}`;
     } else {
       $("leader").textContent = "Starting camera…";
-      await openCamera(video);
+      const status = $("camera-status");
+      const cam = await openCamera(video, {
+        prefer: params.get("camera"),
+        onSlow: () => {
+          status.hidden = false;
+          status.textContent =
+            "Waiting for the camera… Look for a camera permission prompt near the address bar and click Allow. If nothing appears, click the camera icon in the address bar.";
+        },
+      });
+      status.hidden = true;
+      void setupCameraPicker(cam.deviceId);
       $("leader").textContent = "Loading face tracker…";
       const preferred = params.get("delegate")?.toUpperCase() === "CPU" ? "CPU" : undefined;
       const { landmarker } = await createLandmarker(preferred);
@@ -235,10 +458,7 @@ async function init() {
     }
   } catch (err) {
     console.error(err);
-    $("error-msg").textContent =
-      (err as Error).name === "NotAllowedError"
-        ? "Camera permission was denied. Allow camera access and reload."
-        : String((err as Error).message ?? err);
+    $("error-msg").textContent = cameraErrorMessage(err);
     show("error");
     return;
   }
@@ -249,7 +469,7 @@ async function init() {
     if (e.code === "Space" || e.code === "Enter") {
       e.preventDefault();
       startGame();
-    } else if (e.code === "Escape") {
+    } else if (e.code === "Escape" && !isGuest()) {
       // Abandon the round. startGame() rebuilds the engine, so only display state needs clearing.
       round = null;
       recap = null;

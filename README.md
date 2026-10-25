@@ -14,6 +14,18 @@ npm test           # all tests
 npm run typecheck  # browser + server code
 ```
 
+## Remote play (two computers)
+
+Each computer tracks only its own player. Only the face-channel numbers (21 per frame) go through the server, and **video never leaves either computer**. Each player sees both players as cartoon faces. The host (Left) runs the game and streams its state and the recap to the guest (Right). Lag is measured from timestamps on a clock synced with ping/pong, not from arrival times, so network delay doesn't distort it.
+
+1. On the host machine: `npm run dev:https` (game + server over HTTPS). Browsers only allow the camera on `https://` or `localhost`.
+2. Host: open `https://localhost:5173/?remote=new`, or click "Start a remote game" in the lobby. The lobby shows a link like `https://<host-IP>:5173/?room=ABCD&seat=right`.
+3. Guest, on another computer on the same network: open that link and accept the self-signed-certificate warning ("Advanced", then "Proceed"). If it won't load, allow Node through the Windows firewall on the host.
+4. Different networks: expose the host with a tunnel instead, for example `npx cloudflared tunnel --url https://localhost:5173 --no-tls-verify` or Tailscale Funnel. Then share the tunnel URL with `?room=ABCD&seat=right`. The dev server already allows `*.trycloudflare.com` and `*.ts.net`.
+5. Either player presses Space to start. Remote rounds count on the leaderboard like local camera rounds, and the host's "Download round data" includes both players' streams.
+
+Test without cameras: open `?room=TEST&seat=left&sim=mirror` and `?room=TEST&seat=right&sim=mirror` in two browsers.
+
 ## Leaderboard
 
 - After a round, players can type an optional team name and press **Save**. Only the team name and the round's numbers are sent: height, in-sync share, lag, who led, best expression, and a 2 Hz sync curve. No images.

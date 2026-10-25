@@ -17,6 +17,11 @@ export class PlayerHistory {
   }
 }
 
+interface Sample {
+  t: number;
+  v: Float64Array | null;
+}
+
 export class History {
   readonly players: [PlayerHistory, PlayerHistory];
   /** Total grid samples written so far. */
@@ -25,8 +30,10 @@ export class History {
   lastGridT = NaN;
   readonly dtMs: number;
 
-  private prevT = NaN;
-  private prev: [Float64Array | null, Float64Array | null] = [null, null];
+  // Each player's incoming samples are kept separately, because in remote play
+  // they come from different machines and arrive at different times. Grid points
+  // are only written once BOTH players have data at or beyond them.
+  private streams: [Sample[], Sample[]] = [[], []];
   private held: [Float64Array, Float64Array];
 
   constructor(
@@ -42,37 +49,67 @@ export class History {
   reset() {
     this.count = 0;
     this.lastGridT = NaN;
-    this.prevT = NaN;
-    this.prev = [null, null];
+    this.streams = [[], []];
     this.held[0].fill(0);
     this.held[1].fill(0);
   }
 
-  /** Adds one tracker frame. `null` means that player's face was not found. */
+  /** Adds one tracker frame with both players. `null` means that player's face was not found. */
   push(t: number, a: Float64Array | null, b: Float64Array | null) {
-    const cur: [Float64Array | null, Float64Array | null] = [a, b];
-    if (Number.isNaN(this.prevT)) {
-      this.prevT = t;
-      this.prev = [a && a.slice(), b && b.slice()];
-      this.write(t, cur, cur, 1);
-      return;
-    }
-    if (t <= this.prevT) return;
-    // Emit every grid point in (lastGridT, t].
-    for (let g = this.lastGridT + this.dtMs; g <= t; g += this.dtMs) {
-      const f = (g - this.prevT) / (t - this.prevT);
-      this.write(g, this.prev, cur, f);
-    }
-    this.prevT = t;
-    this.prev = [a && a.slice(), b && b.slice()];
+    this.add(0, t, a);
+    this.add(1, t, b);
+    this.emit();
   }
 
-  private write(g: number, from: (Float64Array | null)[], to: (Float64Array | null)[], f: number) {
+  /** Adds one player's sample (remote play). Out-of-order samples are dropped. */
+  pushPlayer(player: 0 | 1, t: number, v: Float64Array | null) {
+    this.add(player, t, v);
+    this.emit();
+  }
+
+  /** Time of the newest sample from a player, or NaN. */
+  latest(player: 0 | 1): number {
+    const s = this.streams[player];
+    return s.length ? s[s.length - 1].t : NaN;
+  }
+
+  private add(p: 0 | 1, t: number, v: Float64Array | null) {
+    const s = this.streams[p];
+    if (s.length && t <= s[s.length - 1].t) return;
+    s.push({ t, v: v && v.slice() });
+  }
+
+  private emit() {
+    const [sa, sb] = this.streams;
+    if (!sa.length || !sb.length) return;
+    const ready = Math.min(sa[sa.length - 1].t, sb[sb.length - 1].t);
+    if (Number.isNaN(this.lastGridT)) {
+      const g0 = Math.max(sa[0].t, sb[0].t);
+      if (g0 > ready) return;
+      this.write(g0);
+    }
+    for (let g = this.lastGridT + this.dtMs; g <= ready; g += this.dtMs) this.write(g);
+    // Keep only the last sample at or before the grid (the next left bracket) and newer ones.
+    for (const s of this.streams) {
+      let i = 0;
+      while (i + 1 < s.length && s[i + 1].t <= this.lastGridT) i++;
+      if (i > 0) s.splice(0, i);
+    }
+  }
+
+  private write(g: number) {
     const slot = this.count % this.capacity;
     for (let p = 0; p < 2; p++) {
+      const s = this.streams[p];
+      // Bracket g with (t0, t1]; exactly at the first sample, use it on both sides.
+      let j = 0;
+      while (j < s.length && s[j].t < g) j++;
+      const right = s[Math.min(j, s.length - 1)];
+      const left = j === 0 ? right : s[j - 1];
+      const x0 = left.v;
+      const x1 = right.v;
+      const f = right.t === left.t ? 1 : (g - left.t) / (right.t - left.t);
       const ph = this.players[p];
-      const x0 = from[p];
-      const x1 = to[p];
       const held = this.held[p];
       if (x0 && x1) {
         for (let c = 0; c < this.channels; c++) held[c] = x0[c] + (x1[c] - x0[c]) * f;
