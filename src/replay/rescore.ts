@@ -3,6 +3,7 @@
 // with a snapshot every 100 ms.
 import { computeRecap, type Recap } from "../game/recap";
 import { Round, type ClimbTuning, DEFAULT_CLIMB, type RoundSample } from "../game/round";
+import type { ChannelDef } from "../signal/channels";
 import { SyncEngine, type SyncOptions } from "../sync/syncEngine";
 import { checkRecording, type Recording } from "./recording";
 
@@ -16,10 +17,10 @@ export interface RescoreResult {
 
 export function rescore(
   rec: Recording,
-  opts: { sync?: Partial<SyncOptions>; climb?: ClimbTuning } = {},
+  opts: { sync?: Partial<SyncOptions>; climb?: ClimbTuning; channels?: ChannelDef[] } = {},
 ): RescoreResult {
   checkRecording(rec);
-  const engine = new SyncEngine(opts.sync);
+  const engine = new SyncEngine(opts.sync, opts.channels);
   const round = new Round(rec.roundMs, opts.climb ?? DEFAULT_CLIMB);
   const { calibrateStart = 0, calibrateEnd, roundStart = 0 } = rec.marks;
 

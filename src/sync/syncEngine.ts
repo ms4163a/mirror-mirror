@@ -38,20 +38,30 @@ export interface SyncOptions {
   gateHi: number;
   /** Per-channel weight overrides by channel name (e.g. { headPitch: 0 }). */
   channelWeights: Partial<Record<string, number>>;
+  /**
+   * "channel": correlate each blendshape with the same blendshape.
+   * "family": first combine each player's channels within an expression family
+   * (each z-scored in the window, so it's relative to that player's own range),
+   * then correlate the family signals. A smile one camera reads as "mouth corners
+   * up" then matches a smile another reads as "dimples + pressed lips".
+   */
+  matchBy: "channel" | "family";
 }
 
-// Tuned on a real two-person round (2026-10-25) against the same round with one
-// player time-shifted (real faces, no mirroring). Real expressions are slow, so
-// 4 s windows correlated by chance almost as well as real mirroring did; 8 s
-// windows with a 1.5 s reaction lag separate them. Real mirroring peaks around
-// r = 0.5 (90th percentile), while the shifted version's 90th percentile is 0.25.
+// Tuned on three real two-person rounds (2026-10-25) against the same rounds with
+// one player time-shifted (real faces, no mirroring). Real expressions are slow,
+// so 4 s windows correlated by chance almost as well as real mirroring did; 8 s
+// windows with a 1.5 s reaction lag separate them. Matching by expression family
+// (not blendshape by blendshape) lets a smile one camera reads as "corners up"
+// match a smile another reads as "dimples + pressed lips". Real rounds:
+// 42 / 36 / 22 m; shifted controls at most 8.5 / 4.8 / 3.6 m.
 export const DEFAULT_SYNC_OPTIONS: SyncOptions = {
   rateHz: 30,
   windowMs: 8000,
   maxLagMs: 1500,
   leaderDeadZoneMs: 80,
-  chanceR: 0.25,
-  fullR: 0.5,
+  chanceR: 0.3,
+  fullR: 0.55,
   lagPenalty: 0.25,
   fullActivity: 2,
   minPresence: 0.8,
@@ -59,6 +69,7 @@ export const DEFAULT_SYNC_OPTIONS: SyncOptions = {
   calibrationCap: 1.5,
   gateHi: 1.5,
   channelWeights: {},
+  matchBy: "family",
 };
 
 export interface FamilySync {
@@ -105,6 +116,17 @@ function std(x: Float64Array) {
   return Math.sqrt(v / x.length);
 }
 
+/** Writes x's z-scores into out (all zeros for a flat signal). */
+function zscore(x: Float64Array, out: Float64Array) {
+  let m = 0;
+  for (let i = 0; i < x.length; i++) m += x[i];
+  m /= x.length;
+  let v = 0;
+  for (let i = 0; i < x.length; i++) v += (x[i] - m) * (x[i] - m);
+  const s = Math.sqrt(v / x.length);
+  for (let i = 0; i < x.length; i++) out[i] = s > 1e-9 ? (x[i] - m) / s : 0;
+}
+
 /** Pearson correlation of x[i] against y[i + k] over their overlap. */
 export function laggedCorr(x: Float64Array, y: Float64Array, k: number): number {
   const n = x.length;
@@ -142,6 +164,9 @@ export class SyncEngine {
   private readonly xa: Float64Array;
   private readonly xb: Float64Array;
   private readonly curves: Float64Array[]; // [channel][lag]
+  private readonly famCurves: Float64Array[]; // [family][lag]
+  private readonly za: Float64Array[]; // [channel][sample], z-scored window (family mode)
+  private readonly zb: Float64Array[];
   private calib: { start: number } | null = null;
 
   constructor(opts: Partial<SyncOptions> = {}, readonly channels: ChannelDef[] = CHANNELS) {
@@ -154,6 +179,9 @@ export class SyncEngine {
     this.xa = new Float64Array(this.windowN);
     this.xb = new Float64Array(this.windowN);
     this.curves = channels.map(() => new Float64Array(2 * this.maxLag + 1));
+    this.famCurves = FAMILIES.map(() => new Float64Array(2 * this.maxLag + 1));
+    this.za = channels.map(() => new Float64Array(this.windowN));
+    this.zb = channels.map(() => new Float64Array(this.windowN));
   }
 
   push(t: number, a: Float64Array | null, b: Float64Array | null) {
@@ -199,6 +227,9 @@ export class SyncEngine {
     const presence: [number, number] = [h.presence(0, n), h.presence(1, n)];
 
     const weights = new Float64Array(channels.length);
+    const gates: [Float64Array, Float64Array] = [new Float64Array(channels.length), new Float64Array(channels.length)];
+    const chW = new Float64Array(channels.length);
+    const family = this.opts.matchBy === "family";
     const own: [number, number] = [0, 0];
     let ownNorm = 0;
     let activity = 0;
@@ -212,6 +243,13 @@ export class SyncEngine {
       const ga = smoothstep(1, this.opts.gateHi, std(this.xa) / this.floors[0][c]);
       const gb = smoothstep(1, this.opts.gateHi, std(this.xb) / this.floors[1][c]);
       const both = Math.min(ga, gb);
+      gates[0][c] = ga;
+      gates[1][c] = gb;
+      chW[c] = w;
+      if (family) {
+        zscore(this.xa, this.za[c]);
+        zscore(this.xb, this.zb[c]);
+      }
       // A channel counts if EITHER player moves on it. If only one does, it adds
       // weight but no correlation, so a mismatched expression lowers the score.
       // Counting only shared channels would reward two people making different
@@ -224,14 +262,17 @@ export class SyncEngine {
         ownNorm += w;
       }
       const curve = this.curves[c];
-      if (both > 0) {
+      if (family) {
+        // Correlation is computed per family below; per-channel curves aren't used.
+      } else if (both > 0) {
         for (let k = -L; k <= L; k++) curve[k + L] = both * laggedCorr(this.xa, this.xb, k);
       } else {
         curve.fill(0);
       }
     }
 
-    const agg = this.combine(weights, () => true);
+    const famW = family ? this.familyCurves(gates, chW) : null;
+    const agg = famW ? this.combineFamilies(famW, () => true) : this.combine(weights, () => true);
     let best = 0;
     for (let i = 1; i < agg.curve.length; i++) if (agg.curve[i] > agg.curve[best]) best = i;
     const off =
@@ -254,7 +295,7 @@ export class SyncEngine {
     if (active && mapped > 0 && Math.abs(lagMs) > this.opts.leaderDeadZoneMs) leader = lagMs > 0 ? 0 : 1;
 
     const families: FamilySync[] = FAMILIES.map(({ id, label }) => {
-      const fam = this.combine(weights, (ch) => ch.family === id);
+      const fam = famW ? this.combineFamilies(famW, (f) => f === id) : this.combine(weights, (ch) => ch.family === id);
       let peak = -1;
       for (let i = 0; i < fam.curve.length; i++) peak = Math.max(peak, fam.curve[i]);
       const score =
@@ -277,6 +318,58 @@ export class SyncEngine {
       presence,
       families,
     };
+  }
+
+  /**
+   * Family mode: builds each player's family signal as the gate- and
+   * weight-weighted sum of their z-scored channels, then correlates the two
+   * players' family signals. Returns each family's weight (0 if unused).
+   */
+  private familyCurves(gates: [Float64Array, Float64Array], chW: Float64Array): Float64Array {
+    const { windowN: n, maxLag: L, channels } = this;
+    const weights = new Float64Array(FAMILIES.length);
+    const compA = new Float64Array(n);
+    const compB = new Float64Array(n);
+    FAMILIES.forEach(({ id }, fi) => {
+      compA.fill(0);
+      compB.fill(0);
+      let gA = 0;
+      let gB = 0;
+      let wMax = 0;
+      channels.forEach((ch, c) => {
+        if (ch.family !== id || chW[c] <= 0) return;
+        const ka = chW[c] * gates[0][c];
+        const kb = chW[c] * gates[1][c];
+        for (let i = 0; i < n; i++) {
+          compA[i] += ka * this.za[c][i];
+          compB[i] += kb * this.zb[c][i];
+        }
+        gA = Math.max(gA, gates[0][c]);
+        gB = Math.max(gB, gates[1][c]);
+        wMax = Math.max(wMax, chW[c]);
+      });
+      const both = Math.min(gA, gB);
+      weights[fi] = (both + this.opts.oneSidedPenalty * (Math.max(gA, gB) - both)) * wMax;
+      const curve = this.famCurves[fi];
+      if (both > 0) for (let k = -L; k <= L; k++) curve[k + L] = both * laggedCorr(compA, compB, k);
+      else curve.fill(0);
+    });
+    return weights;
+  }
+
+  /** Weighted average of family curves for families passing `filter`. */
+  private combineFamilies(weights: Float64Array, filter: (f: Family) => boolean) {
+    const curve = new Float64Array(2 * this.maxLag + 1);
+    let weight = 0;
+    FAMILIES.forEach(({ id }, fi) => {
+      const w = weights[fi];
+      if (w <= 0 || !filter(id)) return;
+      weight += w;
+      const src = this.famCurves[fi];
+      for (let i = 0; i < curve.length; i++) curve[i] += w * src[i];
+    });
+    if (weight > 0) for (let i = 0; i < curve.length; i++) curve[i] /= weight;
+    return { curve, weight };
   }
 
   /** Weighted average of channel curves for channels passing `filter`. */

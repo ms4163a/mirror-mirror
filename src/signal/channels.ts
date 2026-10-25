@@ -17,7 +17,7 @@ export const FAMILIES: { id: Family; label: string }[] = [
   { id: "jaw", label: "Mouth open" },
   { id: "pucker", label: "Pucker" },
   { id: "eyes", label: "Eyes" },
-  { id: "puff", label: "Puff & press" },
+  { id: "puff", label: "Cheek puff" },
   { id: "head", label: "Head moves" },
 ];
 
@@ -63,9 +63,11 @@ export const CHANNELS: ChannelDef[] = [
   bs("mouthPucker", "pucker", ["mouthPucker"]),
   bs("mouthFunnel", "pucker", ["mouthFunnel"]),
   bs("eyeBlink", "eyes", pair("eyeBlink"), 0, false),
-  bs("eyeSquint", "eyes", pair("eyeSquint"), 0.25),
+  // Some faces/cameras show a smile mostly as squinting eyes, dimples or pressed
+  // lips rather than raised mouth corners, so these belong to the smile family.
+  bs("eyeSquint", "smile", pair("eyeSquint"), 0.5),
   bs("cheekPuff", "puff", ["cheekPuff"]),
-  bs("mouthPress", "puff", pair("mouthPress")),
+  bs("mouthPress", "smile", pair("mouthPress"), 0.5),
   // Pitch and roll depend on where each camera sits, so two players' values differ
   // even when they mirror. Only yaw (turning) carries signal.
   { name: "headYaw", family: "head", sources: [], floor: 0.03, weight: 0.5, countsAsActivity: true },

@@ -69,10 +69,11 @@ The scene uses simple vector placeholder shapes. Drop `public/assets/jack.png` (
 2. **History** (`src/sync/history.ts`): camera frames are resampled onto a fixed 30 Hz grid. A missing face is marked absent.
 3. **Sync engine** (`src/sync/syncEngine.ts`): every 100 ms, Pearson cross-correlation per channel on an **8 s** window at lags of **±1.5 s** (human reaction time), weighted by movement.
    - A channel counts if either player moves on it; if only one does, it adds half weight (`oneSidedPenalty`) but no correlation, so different faces lower the score.
-   - Mouth channels carry the most weight. Brows, squints, blinks and head pose count for less or nothing, because in real play they correlated about as well by chance.
-   - The peak's height becomes **sync**: 0 at the chance level `chanceR` = 0.25, 1 at `fullR` = 0.5. The peak's position becomes **lag**, and its sign gives the **leader** (dead zone ±80 ms).
+   - Mouth channels carry the most weight. Brows, blinks and head pose count for less or nothing, because in real play they correlated about as well by chance.
+   - **Matched by expression family** (`matchBy: "family"`): each player's channels in a family (smile, frown, mouth open…) are z-scored within the window and summed, and then the two players' family signals are correlated. In playtesting, one player's smile showed up mostly as dimples, pressed lips and squinted eyes rather than raised mouth corners. Channel-by-channel matching scored their smiles as 0; family matching counts them.
+   - The peak's height becomes **sync**: 0 at the chance level `chanceR` = 0.30, 1 at `fullR` = 0.55. The peak's position becomes **lag**, and its sign gives the **leader** (dead zone ±80 ms).
    - **Anti-stillness:** each player's movement is compared with their own floor from a 4 s calibration (capped at 1.5× the default, so fidgeting during calibration can't switch channels off). Two still faces score 0.
-   - **Tuning data:** these defaults come from a real two-person round, compared against the same round with one player shifted 15–57 s in time (real faces, no mirroring). With the old 4 s settings the real round scored 0.0 m. Now the real round scores 37.7 m and 37% in sync; the shifted versions score at most 2.3 m and 3%.
+   - **Tuning data:** these defaults come from three real two-person remote rounds, each compared against the same round with one player shifted 9–49 s in time (real faces, no mirroring). With the original 4 s settings, the first round scored 0.0 m. Now the real rounds score 42 / 36 / 22 m, and the shifted versions at most 8.5 / 4.8 / 3.6 m.
 4. **Round** (`src/game/round.ts`): Jack climbs when smoothed sync is above 0.2, and slips while both players are still. `src/game/prompts.ts` holds the round script for tuning.
 5. **Recap** (`src/game/recap.ts`): time in sync, best streak, median lag, who led, leader-segment comparison, and best-matched expressions. Only measured numbers.
 
