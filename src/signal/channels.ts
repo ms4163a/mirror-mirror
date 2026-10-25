@@ -80,7 +80,7 @@ const HEAD_YAW = CHANNELS.findIndex((c) => c.name === "headYaw");
 
 /** Head angles in radians are divided by these so a big head move is about 1. */
 export const YAW_SCALE = 0.5;
-const PITCH_SCALE = 0.4;
+export const PITCH_SCALE = 0.4;
 const ROLL_SCALE = 0.4;
 
 /** Yaw/pitch/roll (radians) from MediaPipe's column-major 4x4 facial transform. */

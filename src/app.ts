@@ -23,7 +23,7 @@ import { CameraSource, ReplaySource, SIM_MODES, SimSource, type FrameSource, typ
 import { RemoteLink, newRoomCode, type Seat } from "./remote/link";
 import type { RemoteMsg, ScreenName } from "./remote/protocol";
 import { FrameRecorder, type Recording } from "./replay/recording";
-import { CHANNELS, NUM_CHANNELS, YAW_SCALE } from "./signal/channels";
+import { CHANNELS, NUM_CHANNELS, PITCH_SCALE, YAW_SCALE } from "./signal/channels";
 import { ExpressionMeter } from "./signal/meter";
 import { SyncEngine, type SyncSnapshot } from "./sync/syncEngine";
 import { cameraErrorMessage, fillCameraPicker, rememberCamera } from "./tracking/camera";
@@ -91,18 +91,25 @@ function updateMeters() {
  * mouth barely registered). Warn while the smoothed head turn exceeds 25 degrees.
  */
 const HEAD_YAW = CHANNELS.findIndex((c) => c.name === "headYaw");
+const HEAD_PITCH = CHANNELS.findIndex((c) => c.name === "headPitch");
 const yawDeg: [number, number] = [0, 0];
+const pitchDeg: [number, number] = [0, 0];
 function updateFaceWarnings() {
   const notes: string[] = [];
   for (const p of [0, 1] as const) {
     const f = faces[p];
     if (!f.present) {
       yawDeg[p] *= 0.9;
+      pitchDeg[p] *= 0.9;
       continue;
     }
-    const deg = (f.channels[HEAD_YAW] * YAW_SCALE * 180) / Math.PI;
-    yawDeg[p] += (deg - yawDeg[p]) * 0.15; // about 1 s to settle at 10 Hz
-    if (yawDeg[p] > 25) notes.push(`${p === 0 ? "Left" : "Right"}: face your camera (head turned ~${Math.round(yawDeg[p])}°)`);
+    const toDeg = 180 / Math.PI;
+    yawDeg[p] += (f.channels[HEAD_YAW] * YAW_SCALE * toDeg - yawDeg[p]) * 0.15; // about 1 s to settle at 10 Hz
+    pitchDeg[p] += (Math.abs(f.channels[HEAD_PITCH]) * PITCH_SCALE * toDeg - pitchDeg[p]) * 0.15;
+    const who = p === 0 ? "Left" : "Right";
+    // A camera well above or below eye level also weakens mouth readings (seen in playtest round 6).
+    if (yawDeg[p] > 25) notes.push(`${who}: face your camera (head turned ~${Math.round(yawDeg[p])}°)`);
+    else if (pitchDeg[p] > 25) notes.push(`${who}: put your camera at eye level (head tilted ~${Math.round(pitchDeg[p])}°)`);
   }
   const el = $("cam-warn");
   const text = notes.join(" · ");
@@ -119,6 +126,7 @@ const debug = {
   get recording() { return recording; },
   get faceWarning() { return $("cam-warn").hidden ? "" : $("cam-warn").textContent; },
   get yaw() { return yawDeg.map((d) => Math.round(d)); },
+  get pitch() { return pitchDeg.map((d) => Math.round(d)); },
   get present() { return faces.map((f) => f.present); },
   get remote() { return link && { seat: link.seat, ready: link.ready, peer: link.peerConnected, rtt: link.clock.rtt, presence }; },
   start: () => startGame(),
