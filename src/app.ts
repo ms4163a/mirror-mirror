@@ -24,6 +24,7 @@ import { RemoteLink, newRoomCode, type Seat } from "./remote/link";
 import type { RemoteMsg, ScreenName } from "./remote/protocol";
 import { FrameRecorder, type Recording } from "./replay/recording";
 import { NUM_CHANNELS } from "./signal/channels";
+import { ExpressionMeter } from "./signal/meter";
 import { SyncEngine, type SyncSnapshot } from "./sync/syncEngine";
 import { cameraErrorMessage, fillCameraPicker, rememberCamera } from "./tracking/camera";
 import { FaceTracker, createLandmarker, openCamera, type PlayerFrame, type TrackerFrame } from "./tracking/faceTracker";
@@ -76,6 +77,12 @@ let lastRemoteAt = -Infinity;
 let hostState: Extract<RemoteMsg, { type: "state" }> | null = null;
 let hostStateFresh = false;
 const isGuest = () => !!link && !link.isHost;
+/** "What the camera sees" levels per player for the HUD. */
+const meters = [new ExpressionMeter(), new ExpressionMeter()] as const;
+function updateMeters() {
+  for (const p of [0, 1] as const) meters[p].update(faces[p].present ? faces[p].channels : null);
+  hud.updateSeen([meters[0].levels, meters[1].levels]);
+}
 
 // Read-only debug handle for headless checks.
 const debug = {
@@ -362,6 +369,7 @@ function updateRemoteInfo(l: RemoteLink) {
 }
 
 let lastFrameT = performance.now();
+let lastMeterT = 0;
 let lastSnapT = 0;
 
 function tick(now: number) {
@@ -374,6 +382,8 @@ function tick(now: number) {
     onLocalRemoteFrame(frame, link);
   } else if (frame) {
     const [a, b] = frame.players;
+    faces[0] = a;
+    faces[1] = b;
     presence = [a.present, b.present];
     recorder.push(frame);
     engine.push(frame.t, a.present ? a.channels : null, b.present ? b.channels : null);
@@ -383,6 +393,11 @@ function tick(now: number) {
   }
   if (link?.isHost) hostKeepRemoteAlive(now);
   if (link) updateRemoteInfo(link);
+
+  if (now - lastMeterT >= 100) {
+    lastMeterT = now;
+    updateMeters();
+  }
 
   if (isGuest()) {
     guestTick(dt);
