@@ -27,7 +27,7 @@ describe("BrowGeometry", () => {
     let v = 0;
     for (let i = 0; i < 150; i++) v = g.update(face(0, 0, 0, noise), 1);
     expect(v).toBeLessThan(0.15); // jitter alone stays low
-    for (let i = 0; i < 10; i++) v = g.update(face(0.004, 0, 0.002, noise), 1); // a small real scowl
+    for (let i = 0; i < 10; i++) v = g.update(face(0.008, 0, 0.004, noise), 1); // a clear real scowl
     expect(v).toBeGreaterThan(0.3);
   });
 

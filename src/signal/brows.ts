@@ -24,9 +24,9 @@ const EYE_A = 33;
 const EYE_B = 263;
 
 /** Smallest change (eye-distance units) that counts as a full scowl, however quiet the tracking. */
-const MIN_FULL = 0.012;
+const MIN_FULL = 0.022;
 /** A full scowl is this many times the player's typical frame-to-frame jitter. */
-const JITTER_MULT = 10;
+const JITTER_MULT = 18;
 /** Output for a full scowl, in browDown blendshape units (clear scowls read ~0.3-0.5). */
 const OUTPUT_SCALE = 0.6;
 /** Resting-level adaptation per frame (about 10 s at 30 fps). */

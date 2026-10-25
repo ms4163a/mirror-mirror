@@ -117,11 +117,16 @@ export class Hud {
     ctx.fill();
     ctx.stroke();
     ctx.strokeStyle = "#e8e8ef";
-    const brow = (v("browInnerUp") + v("browOuterUp")) * r * 0.25 - v("browDown") * r * 0.15;
+    // Brows are drawn as angled lines: the inner end drops (and the outer end lifts)
+    // for an angry scowl, and the inner end rises for a worried/surprised look.
+    const lift = (v("browInnerUp") + v("browOuterUp")) * r * 0.2;
+    const angry = Math.min(1, Math.max(0, v("browDown") - 0.08) / 0.4); // ignore slight readings; full tilt at a strong scowl
+    const innerDrop = angry * r * 0.14 - v("browInnerUp") * r * 0.12;
+    const outerLift = angry * r * 0.04 + v("browOuterUp") * r * 0.05;
     for (const s of [-1, 1]) {
       ctx.beginPath();
-      ctx.moveTo(s * r * 0.5, -r * 0.35 - brow);
-      ctx.lineTo(s * r * 0.15, -r * 0.4 - brow);
+      ctx.moveTo(s * r * 0.5, -r * 0.35 - lift - outerLift);
+      ctx.lineTo(s * r * 0.15, -r * 0.4 - lift + innerDrop);
       ctx.stroke();
       ctx.beginPath();
       ctx.ellipse(s * r * 0.32, -r * 0.15, r * 0.1, r * 0.1 * (1 - 0.9 * v("eyeBlink")) + 1, 0, 0, Math.PI * 2);
