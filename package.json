@@ -8,14 +8,19 @@
     "predev": "node scripts/setup-assets.mjs",
     "dev": "vite",
     "prebuild": "node scripts/setup-assets.mjs",
-    "build": "tsc --noEmit && vite build",
+    "build": "npm run typecheck && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "server": "node server/index.ts",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.server.json",
+    "start": "npm run build && node server/index.ts --static dist",
+    "dev:all": "node scripts/setup-assets.mjs && node scripts/dev-all.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.1.1"
   },
   "devDependencies": {
+    "@types/node": "^26.6.5",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
     "vitest": "^5.0.5"

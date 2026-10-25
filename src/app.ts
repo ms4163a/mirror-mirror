@@ -8,9 +8,12 @@
 //   ?roundMs=20000                                    shorter rounds for testing
 //   ?replay=<url>                                     replay a recorded session (from "Download round data")
 //   ?coach=off                                        skip the Llama coach's note
+//   ?api=http://host:8787                             leaderboard server (default: same origin /api)
 import { computeRecap, type Recap } from "./game/recap";
 import { Round } from "./game/round";
 import { cancelCoachNote, showCoachNote } from "./llm/coachView";
+import { flushQueue } from "./net/leaderboardClient";
+import { showSaveBox } from "./net/saveView";
 import { CameraSource, ReplaySource, SIM_MODES, SimSource, type FrameSource, type SimMode } from "./input/sources";
 import { FrameRecorder, type Recording } from "./replay/recording";
 import { SyncEngine, type SyncSnapshot } from "./sync/syncEngine";
@@ -95,13 +98,15 @@ function finishRound() {
   if (!round) return;
   recorder.mark("roundEnd", performance.now());
   recording = recorder.finish(round.durationMs);
-  recap = computeRecap(round.samples, round.durationMs);
+  // Use Jack's final height, not the last 10 Hz sample's, so the recap matches the on-screen counter.
+  recap = { ...computeRecap(round.samples, round.durationMs), height: round.height };
   const host = $("screen-recap");
   show("recap");
   renderRecap(host, recap, round.samples);
   host.querySelector('[data-action="again"]')!.addEventListener("click", () => startGame());
   host.querySelector('[data-action="download"]')!.addEventListener("click", downloadRound);
   if (params.get("coach") !== "off") showCoachNote(host, recap);
+  showSaveBox(host, recap, round.samples, source instanceof CameraSource ? "camera" : source instanceof ReplaySource ? "replay" : "sim");
 }
 
 function downloadRound() {
@@ -239,6 +244,8 @@ async function init() {
   }
   $("start").addEventListener("click", () => startGame());
   window.addEventListener("keydown", (e) => {
+    // Typing a team name must not start a round.
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
     if (e.code === "Space" || e.code === "Enter") {
       e.preventDefault();
       startGame();
@@ -253,6 +260,7 @@ async function init() {
     }
   });
   requestAnimationFrame(tick);
+  void flushQueue(); // upload rounds saved while the leaderboard was offline
   // A replay starts by itself so its calibration and round line up with the recording.
   if (source instanceof ReplaySource) startGame(true);
 }

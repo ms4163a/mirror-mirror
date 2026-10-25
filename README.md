@@ -6,10 +6,22 @@ A two-player browser game (HackTX 2026). It measures how well two people mirror 
 
 ```sh
 npm install
-npm run dev        # game:        http://localhost:5173/          (Chrome)
-                   # feasibility: http://localhost:5173/dev.html
-npm test           # sync engine, tracking and round tests
+npm run dev:all    # game + leaderboard server together, or separately:
+npm run dev        #   game:        http://localhost:5173/              (Chrome)
+                   #   feasibility: http://localhost:5173/dev.html
+npm run server     #   leaderboard server on :8787 (the game proxies /api to it)
+npm test           # all tests
+npm run typecheck  # browser + server code
 ```
+
+## Leaderboard
+
+- After a round, players can type an optional team name and press **Save**. Only the team name and the round's numbers are sent: height, in-sync share, lag, who led, best expression, and a 2 Hz sync curve. No images.
+- **Display:** open `http://<game-PC-IP>:5173/leaderboard.html` on the leaderboard laptop, on the same network. It updates live over Server-Sent Events. If the laptop can't connect, allow Node through the Windows firewall on the game PC.
+- **Test rounds:** rounds from `?sim=` and `?replay=` are stored but hidden from the board. Add `?test=1` to show them.
+- **Offline:** if the server is down, the game queues saved rounds in localStorage and uploads them on the next start.
+- **Storage:** `server/data/rounds.jsonl`, gitignored. The store sits behind an interface (`server/store.ts`), so a Tiger Data (Postgres) store can replace it for the Vultr deployment.
+- **Production:** `npm start` builds the app and serves it plus the API from one Node process (`node server/index.ts --static dist`).
 
 `npm run dev` copies the MediaPipe wasm runtime into `public/mediapipe/` before it starts. The face model is committed in `public/models/`. After `npm install` the app needs no internet.
 

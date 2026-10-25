@@ -49,5 +49,6 @@ export function rescore(
     lastT = f.t;
     if (round.done) break;
   }
-  return { samples: round.samples, recap: computeRecap(round.samples, round.durationMs), height: round.height };
+  const recap = { ...computeRecap(round.samples, round.durationMs), height: round.height }; // same as app.ts
+  return { samples: round.samples, recap, height: round.height };
 }

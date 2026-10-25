@@ -140,3 +140,6 @@ token.env
 # Mirror, Mirror: generated/local assets
 public/mediapipe/
 public/bench/
+
+# Leaderboard data (local file store)
+server/data/

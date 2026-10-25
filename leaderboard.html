@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Beanstalk Leaderboard</title>
+  </head>
+  <body>
+    <header>
+      <h1>Mirror, Mirror <span>· Beanstalk leaderboard</span></h1>
+      <div id="conn" class="conn"><i></i><span>Connecting…</span></div>
+    </header>
+    <main>
+      <section class="board">
+        <h2>Highest climbs</h2>
+        <table>
+          <thead>
+            <tr><th>#</th><th>Team</th><th class="num">Climb</th><th class="num">In sync</th><th class="num">Lag</th><th>Best match</th></tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <p id="empty" class="empty" hidden>No rounds yet. Be the first to climb!</p>
+      </section>
+      <aside class="latest">
+        <h2>Latest round</h2>
+        <div id="latest"><p class="empty">Waiting for a round…</p></div>
+        <p class="note">Feedback on a game, not on anyone's relationship. Only team names and numbers are stored.</p>
+      </aside>
+    </main>
+    <script type="module" src="/src/leaderboard/main.ts"></script>
+  </body>
+</html>
