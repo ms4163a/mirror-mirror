@@ -3,16 +3,10 @@
 import { ROUND_SCRIPT, scriptTime } from "../game/prompts";
 import { IN_SYNC, type Recap } from "../game/recap";
 import type { RoundSample } from "../game/round";
-import { MILESTONES } from "./scene";
+import { reachedSentence } from "./scene";
 import { PLAYER_COLORS } from "./hud";
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
-
-function milestoneFor(height: number) {
-  let reached = "the garden";
-  for (const m of MILESTONES) if (height >= m.m) reached = m.label.toLowerCase();
-  return reached;
-}
 
 export function renderRecap(host: HTMLElement, recap: Recap, samples: RoundSample[]) {
   const lag = recap.medianLagMs === null ? "–" : `${Math.round(recap.medianLagMs)} ms`;
@@ -26,7 +20,7 @@ export function renderRecap(host: HTMLElement, recap: Recap, samples: RoundSampl
   host.innerHTML = `
     <div class="recap">
       <h2>Jack climbed <span class="big">${recap.height.toFixed(1)} m</span></h2>
-      <p class="sub">He reached ${milestoneFor(recap.height)}.</p>
+      <p class="sub">${reachedSentence(recap.height)}</p>
       <div class="tiles">
         <div class="tile"><span class="tile-v">${pct(recap.inSyncShare)}</span><span class="tile-k">of the round in sync</span></div>
         <div class="tile"><span class="tile-v">${recap.bestStreakS.toFixed(1)} s</span><span class="tile-k">longest sync streak</span></div>

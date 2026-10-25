@@ -3,11 +3,18 @@
 // public/assets/ (jack.png first), and it replaces the placeholder automatically.
 
 export const MILESTONES = [
-  { m: 25, label: "Treetops" },
-  { m: 50, label: "Above the clouds" },
-  { m: 75, label: "Jet stream" },
-  { m: 100, label: "Giant's castle" },
+  { m: 25, label: "Treetops", reached: "He reached the treetops." },
+  { m: 50, label: "Above the clouds", reached: "He climbed above the clouds." },
+  { m: 75, label: "Jet stream", reached: "He reached the jet stream." },
+  { m: 100, label: "Giant's castle", reached: "He made it to the giant's castle." },
 ];
+
+/** The sentence the recap shows under the height: the highest milestone Jack passed. */
+export function reachedSentence(height: number): string {
+  let sentence = "He's still down in the garden.";
+  for (const m of MILESTONES) if (height >= m.m) sentence = m.reached;
+  return sentence;
+}
 
 /** Meters of world visible top to bottom. */
 const VIEW_M = 14;
