@@ -157,10 +157,10 @@ export class Scene {
       ctx.lineTo(w, y);
       ctx.stroke();
       ctx.setLineDash([]);
-      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.fillStyle = "rgba(255,255,255,0.95)";
       ctx.font = `600 ${Math.round(ppm * 0.45)}px system-ui, sans-serif`;
       ctx.textAlign = "right";
-      ctx.fillText(`${ms.label} · ${ms.m} m`, w - ppm * 0.4, y - ppm * 0.2);
+      this.text(`${ms.label} · ${ms.m} m`, w - ppm * 0.4, y - ppm * 0.2);
     }
 
     // Height ruler on the left
@@ -168,9 +168,9 @@ export class Scene {
     ctx.font = `${Math.round(ppm * 0.32)}px system-ui, sans-serif`;
     for (let m = Math.max(0, Math.ceil(botM / 5) * 5); m < topM; m += 5) {
       const y = yOf(m);
-      ctx.fillStyle = "rgba(255,255,255,0.5)";
+      ctx.fillStyle = "rgba(255,255,255,0.7)";
       ctx.fillRect(0, y, m % 10 === 0 ? ppm * 0.5 : ppm * 0.25, 2);
-      if (m % 10 === 0) ctx.fillText(`${m} m`, ppm * 0.6, y + ppm * 0.12);
+      if (m % 10 === 0) this.text(`${m} m`, ppm * 0.6, y + ppm * 0.12);
     }
 
     // Beanstalk
@@ -204,8 +204,18 @@ export class Scene {
       ctx.fillStyle = "rgba(255,255,255,0.92)";
       ctx.font = `700 ${Math.round(ppm * 0.5)}px system-ui, sans-serif`;
       ctx.textAlign = "left";
-      ctx.fillText("Move! I'm slipping…", jackX + ppm * 0.9, yOf(s.height) - ppm * 1.4);
+      this.text("Move! I'm slipping…", jackX + ppm * 0.9, yOf(s.height) - ppm * 1.4);
     }
+  }
+
+  /** Fills text with a soft dark shadow so white labels stay readable on the pale low sky. */
+  private text(str: string, x: number, y: number) {
+    const { ctx } = this;
+    ctx.save();
+    ctx.shadowColor = "rgba(10, 20, 50, 0.7)";
+    ctx.shadowBlur = 5;
+    ctx.fillText(str, x, y);
+    ctx.restore();
   }
 
   private cloud(x: number, y: number, r: number) {

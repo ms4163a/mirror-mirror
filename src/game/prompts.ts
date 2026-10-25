@@ -24,8 +24,21 @@ export const ROUND_SCRIPT: PromptCard[] = [
   { at: 56_000, title: "Final push!", hint: "Biggest faces you've got", lead: "free" },
 ];
 
-export function promptAt(elapsedMs: number, script = ROUND_SCRIPT): { card: PromptCard; index: number } {
+/**
+ * Start time of a card in a round of `durationMs`. The script is authored for a
+ * full `ROUND_MS` round; shorter rounds (e.g. `?roundMs=20000`) compress it
+ * proportionally so every card still appears.
+ */
+export function scriptTime(at: number, durationMs = ROUND_MS): number {
+  return (at * durationMs) / ROUND_MS;
+}
+
+export function promptAt(
+  elapsedMs: number,
+  script = ROUND_SCRIPT,
+  durationMs = ROUND_MS,
+): { card: PromptCard; index: number } {
   let index = 0;
-  for (let i = 0; i < script.length; i++) if (script[i].at <= elapsedMs) index = i;
+  for (let i = 0; i < script.length; i++) if (scriptTime(script[i].at, durationMs) <= elapsedMs) index = i;
   return { card: script[index], index };
 }

@@ -2,7 +2,7 @@
 // snapshot for the recap.
 import type { Family } from "../signal/channels";
 import type { SyncSnapshot } from "../sync/syncEngine";
-import { ROUND_MS, promptAt, type PromptCard } from "./prompts";
+import { ROUND_MS, ROUND_SCRIPT, promptAt, type PromptCard } from "./prompts";
 
 export interface ClimbTuning {
   /** Sync below this does not move Jack. */
@@ -45,7 +45,7 @@ export class Round {
   }
 
   get prompt(): { card: PromptCard; index: number } {
-    return promptAt(this.elapsed);
+    return promptAt(this.elapsed, ROUND_SCRIPT, this.durationMs);
   }
 
   /** Advances the round clock and Jack. `snap` is the newest snapshot, if any. */
@@ -54,16 +54,19 @@ export class Round {
     dtMs = Math.min(dtMs, this.durationMs - this.elapsed);
     this.elapsed += dtMs;
     const target = snap?.sync ?? 0;
+    const { syncThreshold, maxClimb, stillSlip } = this.tuning;
+    const climbRate = (s: number) => (Math.max(0, s - syncThreshold) / (1 - syncThreshold)) * maxClimb;
+    const before = this.sync;
     // Smooth over about 300 ms.
     this.sync += (target - this.sync) * (1 - Math.exp(-dtMs / 300));
 
-    const { syncThreshold, maxClimb, stillSlip } = this.tuning;
     const dt = dtMs / 1000;
     if (snap && !snap.active) {
       this.height = Math.max(0, this.height - stillSlip * dt);
-    } else if (this.sync > syncThreshold) {
-      const u = (this.sync - syncThreshold) / (1 - syncThreshold);
-      this.height += maxClimb * u * dt;
+    } else {
+      // Average the rate before and after smoothing (trapezoid), so the height
+      // doesn't depend on how often update() is called (60 Hz live, 30 Hz replay).
+      this.height += 0.5 * (climbRate(before) + climbRate(this.sync)) * dt;
     }
   }
 
