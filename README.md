@@ -73,10 +73,10 @@ The scene uses simple vector placeholder shapes. Drop `public/assets/jack.png` (
    - **Matched by expression family** (`matchBy: "family"`): each player's channels in a family (smile, frown, mouth open…) are z-scored within the window and summed, and then the two players' family signals are correlated. In playtesting, one player's smile showed up mostly as dimples, pressed lips and squinted eyes rather than raised mouth corners. Channel-by-channel matching scored their smiles as 0; family matching counts them.
    - The peak's height becomes **sync**: 0 at the chance level `chanceR` = 0.30, 1 at `fullR` = 0.48. The peak's position becomes **lag**, and its sign gives the **leader** (dead zone ±80 ms).
    - **Anti-stillness:** each player's movement is compared with their own floor from a 4 s calibration (capped at 1.5× the default, so fidgeting during calibration can't switch channels off). Two still faces score 0.
-   - **Tuning data:** five real two-person remote rounds. Every candidate setting was compared against 30 controls: the same rounds with one player shifted 7–47 s in time (real faces, no mirroring). The comparison was run at a matched false-positive rate, so settings are judged on how well they separate real mirroring from chance, not on how lenient they are.
+   - **Tuning data:** five real two-person remote rounds (a sixth, played afterwards with these settings, is included in the results below). Every candidate setting was compared against 30 controls: the same rounds with one player shifted 7–47 s in time (real faces, no mirroring). The comparison was run at a matched false-positive rate, so settings are judged on how well they separate real mirroring from chance, not on how lenient they are.
      - With the original 4 s settings, the first round scored 0.0 m.
-     - Now the real rounds score 63 / 54 / 22 / 25 / 0 m, with 55 / 53 / 23 / 23 / 0% in sync.
-     - Controls average 2.4 m (90th percentile 9 m, worst 11 m).
+     - Now the six real rounds score 63 / 54 / 22 / 25 / 0 / 45 m, with 55 / 53 / 23 / 23 / 0 / 45% in sync.
+     - Their 36 controls average 3.5 m (90th percentile 9 m, worst 16 m).
      - The fifth round had one player's head turned about 37° from their camera all round, so their face barely registered. The game now warns about this.
    - **Tried and rejected** (worse at the same false-positive rate): gating each player against their own range, per-family lags, ignoring small one-sided twitches, and correlating expression changes instead of levels.
    - **Head-turn warning:** if a player's head stays turned more than 25° from their camera, the camera panel shows "Right: face your camera (head turned ~37°)". Tracking quality drops sharply off-axis.

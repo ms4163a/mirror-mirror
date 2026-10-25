@@ -32,6 +32,8 @@ const TYPES: Record<string, string> = {
 export function networkAddresses(): { address: string; label: string }[] {
   const out: { address: string; label: string; rank: number }[] = [];
   for (const [name, infos] of Object.entries(networkInterfaces())) {
+    // Virtual adapters (WSL/Hyper-V, VMs, Docker) are never reachable from another computer.
+    if (/vethernet|wsl|hyper-v|virtualbox|vmware|docker|vbox|loopback/i.test(name)) continue;
     for (const i of infos ?? []) {
       if (i.family !== "IPv4" || i.internal || i.address.startsWith("169.254.")) continue; // skip loopback and link-local
       const tailscale = i.address.startsWith("100.") || /tailscale/i.test(name);
