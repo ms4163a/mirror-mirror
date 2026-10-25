@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { History } from "./history";
-import { SyncEngine, laggedCorr, type SyncSnapshot } from "./syncEngine";
+import { DEFAULT_SYNC_OPTIONS, SyncEngine, laggedCorr, type SyncSnapshot } from "./syncEngine";
 import { Performer, runScenario, type ScenarioPlayer } from "./synthetic";
 
 const DURATION = 20000;
@@ -127,7 +127,7 @@ describe("SyncEngine", () => {
     engine.startCalibration();
     runScenario([{ source: null, noise: 0.05 }, { source: null }], 5000, (t, a, b) => engine.push(t, a, b));
     engine.endCalibration();
-    expect(engine.floors[0][0]).toBeCloseTo(0.09, 5); // capped at 3x default 0.03
+    expect(engine.floors[0][0]).toBeCloseTo(0.03 * DEFAULT_SYNC_OPTIONS.calibrationCap, 5); // capped
     expect(engine.floors[1][0]).toBeCloseTo(0.03, 5); // quiet face keeps the default
   });
 });

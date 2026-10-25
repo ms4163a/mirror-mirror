@@ -19,20 +19,46 @@ export interface SyncOptions {
   leaderDeadZoneMs: number;
   /** Peak correlation that unrelated movement typically reaches. Maps to sync 0. */
   chanceR: number;
+  /** Peak correlation that counts as excellent mirroring for real faces. Maps to sync 1. */
+  fullR: number;
+  /** Sync lost at the maximum lag (following is still mirroring, so keep this small). */
+  lagPenalty: number;
   /** Sum of gated activity weights needed for full credit. */
   fullActivity: number;
   /** Minimum face presence in the window for a valid snapshot. */
   minPresence: number;
+  /**
+   * How much a channel that only ONE player moves counts against the score
+   * (0 = ignored, 1 = full weight with zero correlation).
+   */
+  oneSidedPenalty: number;
+  /** Calibration can raise a channel's "moving" floor to at most this multiple of its default. */
+  calibrationCap: number;
+  /** A channel counts as fully moving at this multiple of its floor (it starts at 1x). */
+  gateHi: number;
+  /** Per-channel weight overrides by channel name (e.g. { headPitch: 0 }). */
+  channelWeights: Partial<Record<string, number>>;
 }
 
+// Tuned on a real two-person round (2026-10-25) against the same round with one
+// player time-shifted (real faces, no mirroring). Real expressions are slow, so
+// 4 s windows correlated by chance almost as well as real mirroring did; 8 s
+// windows with a 1.5 s reaction lag separate them. Real mirroring peaks around
+// r = 0.5 (90th percentile), while the shifted version's 90th percentile is 0.25.
 export const DEFAULT_SYNC_OPTIONS: SyncOptions = {
   rateHz: 30,
-  windowMs: 4000,
-  maxLagMs: 1000,
+  windowMs: 8000,
+  maxLagMs: 1500,
   leaderDeadZoneMs: 80,
   chanceR: 0.25,
+  fullR: 0.5,
+  lagPenalty: 0.25,
   fullActivity: 2,
   minPresence: 0.8,
+  oneSidedPenalty: 0.5,
+  calibrationCap: 1.5,
+  gateHi: 1.5,
+  channelWeights: {},
 };
 
 export interface FamilySync {
@@ -158,7 +184,7 @@ export class SyncEngine {
     for (let p = 0 as 0 | 1; p < 2; p = (p + 1) as 0 | 1) {
       this.channels.forEach((ch, c) => {
         const noise = std(this.history.window(p, c, n, buf));
-        this.floors[p][c] = Math.min(ch.floor * 3, Math.max(ch.floor, noise * 3));
+        this.floors[p][c] = Math.min(ch.floor * this.opts.calibrationCap, Math.max(ch.floor, noise * 3));
       });
     }
   }
@@ -179,22 +205,23 @@ export class SyncEngine {
 
     for (let c = 0; c < channels.length; c++) {
       const ch = channels[c];
+      const w = this.opts.channelWeights[ch.name] ?? ch.weight;
       h.window(0, c, n, this.xa);
       h.window(1, c, n, this.xb);
       // Each player's movement gate opens between 1x and 2x their floor.
-      const ga = smoothstep(1, 2, std(this.xa) / this.floors[0][c]);
-      const gb = smoothstep(1, 2, std(this.xb) / this.floors[1][c]);
+      const ga = smoothstep(1, this.opts.gateHi, std(this.xa) / this.floors[0][c]);
+      const gb = smoothstep(1, this.opts.gateHi, std(this.xb) / this.floors[1][c]);
       const both = Math.min(ga, gb);
       // A channel counts if EITHER player moves on it. If only one does, it adds
       // weight but no correlation, so a mismatched expression lowers the score.
       // Counting only shared channels would reward two people making different
       // faces whenever they overlap by chance.
-      weights[c] = Math.max(ga, gb) * ch.weight;
-      if (ch.countsAsActivity) {
-        activity += both * ch.weight;
-        own[0] += ga * ch.weight;
-        own[1] += gb * ch.weight;
-        ownNorm += ch.weight;
+      weights[c] = (both + this.opts.oneSidedPenalty * (Math.max(ga, gb) - both)) * w;
+      if (ch.countsAsActivity && w > 0) {
+        activity += both * w;
+        own[0] += ga * w;
+        own[1] += gb * w;
+        ownNorm += w;
       }
       const curve = this.curves[c];
       if (both > 0) {
@@ -219,8 +246,8 @@ export class SyncEngine {
     const active = valid && activity >= 0.5;
     const activityFactor = Math.min(1, activity / this.opts.fullActivity);
     // Following within the lag range is still mirroring, but a long lag is worth a bit less.
-    const lagFactor = 1 - 0.4 * Math.min(1, Math.abs(lagMs) / this.opts.maxLagMs);
-    const mapped = Math.max(0, Math.min(1, (peakR - this.opts.chanceR) / (1 - this.opts.chanceR)));
+    const lagFactor = 1 - this.opts.lagPenalty * Math.min(1, Math.abs(lagMs) / this.opts.maxLagMs);
+    const mapped = Math.max(0, Math.min(1, (peakR - this.opts.chanceR) / (this.opts.fullR - this.opts.chanceR)));
     const sync = active ? mapped * activityFactor * lagFactor : 0;
 
     let leader: 0 | 1 | null = null;

@@ -48,10 +48,13 @@ export const CHANNELS: ChannelDef[] = [
   bs("smile", "smile", pair("mouthSmile")),
   bs("cheekSquint", "smile", pair("cheekSquint")),
   bs("dimple", "smile", pair("mouthDimple")),
-  bs("browInnerUp", "surprise", ["browInnerUp"]),
-  bs("browOuterUp", "surprise", pair("browOuterUp")),
+  // Brows, eyes and head pose carried little mirroring signal in real play
+  // (they correlated about as well by chance), so they count for less. The
+  // mouth channels separated real mirroring from chance best.
+  bs("browInnerUp", "surprise", ["browInnerUp"], 0.5),
+  bs("browOuterUp", "surprise", pair("browOuterUp"), 0.5),
   bs("eyeWide", "surprise", pair("eyeWide")),
-  bs("browDown", "frown", pair("browDown")),
+  bs("browDown", "frown", pair("browDown"), 0.5),
   bs("mouthFrown", "frown", pair("mouthFrown")),
   bs("noseSneer", "frown", pair("noseSneer")),
   bs("jawOpen", "jaw", ["jawOpen"]),
@@ -59,13 +62,15 @@ export const CHANNELS: ChannelDef[] = [
   bs("mouthUpperUp", "jaw", pair("mouthUpperUp")),
   bs("mouthPucker", "pucker", ["mouthPucker"]),
   bs("mouthFunnel", "pucker", ["mouthFunnel"]),
-  bs("eyeBlink", "eyes", pair("eyeBlink"), 0.5, false),
-  bs("eyeSquint", "eyes", pair("eyeSquint"), 0.5),
+  bs("eyeBlink", "eyes", pair("eyeBlink"), 0, false),
+  bs("eyeSquint", "eyes", pair("eyeSquint"), 0.25),
   bs("cheekPuff", "puff", ["cheekPuff"]),
   bs("mouthPress", "puff", pair("mouthPress")),
-  { name: "headYaw", family: "head", sources: [], floor: 0.03, weight: 1, countsAsActivity: true },
-  { name: "headPitch", family: "head", sources: [], floor: 0.03, weight: 1, countsAsActivity: true },
-  { name: "headRoll", family: "head", sources: [], floor: 0.03, weight: 1, countsAsActivity: true },
+  // Pitch and roll depend on where each camera sits, so two players' values differ
+  // even when they mirror. Only yaw (turning) carries signal.
+  { name: "headYaw", family: "head", sources: [], floor: 0.03, weight: 0.5, countsAsActivity: true },
+  { name: "headPitch", family: "head", sources: [], floor: 0.03, weight: 0, countsAsActivity: true },
+  { name: "headRoll", family: "head", sources: [], floor: 0.03, weight: 0, countsAsActivity: true },
 ];
 
 export const NUM_CHANNELS = CHANNELS.length;
