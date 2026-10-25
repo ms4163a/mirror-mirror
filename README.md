@@ -65,6 +65,7 @@ The scene uses simple vector placeholder shapes. Drop `public/assets/jack.png` (
 ## How sync is measured
 
 1. **Channels** (`src/signal/channels.ts`): 52 blendshapes become 18 expression channels, plus head yaw, pitch and roll. Left/right pairs are averaged and yaw and roll use absolute values, so mirroring and copying score the same. Gaze is dropped.
+   **Smoothing:** each player's channels pass through a One Euro filter (`src/signal/oneEuro.ts`, cutoff 1.5 Hz, beta 2). It removes webcam jitter while a face holds still and stays responsive during fast moves. In playtesting it cut one player's frame-to-frame jitter about 3×. Turn it off with `?filter=off`.
 2. **History** (`src/sync/history.ts`): camera frames are resampled onto a fixed 30 Hz grid. A missing face is marked absent.
 3. **Sync engine** (`src/sync/syncEngine.ts`): every 100 ms, Pearson cross-correlation per channel on an **8 s** window at lags of **±1.5 s** (human reaction time), weighted by movement.
    - A channel counts if either player moves on it; if only one does, it adds half weight (`oneSidedPenalty`) but no correlation, so different faces lower the score.

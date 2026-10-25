@@ -8,6 +8,7 @@ import {
   type NormalizedLandmark,
 } from "@mediapipe/tasks-vision";
 import { ChannelMapper, NUM_CHANNELS } from "../signal/channels";
+import { OneEuroVector } from "../signal/oneEuro";
 
 export type Delegate = "GPU" | "CPU";
 
@@ -85,6 +86,10 @@ export class FaceTracker {
   private lastTs = -1;
   private readonly assigner = new PlayerAssigner();
   private readonly mappers = [new ChannelMapper(), new ChannelMapper()];
+  // Smooths webcam jitter per player (see signal/oneEuro.ts). Disable with ?filter=off.
+  private readonly filters = new URLSearchParams(location.search).get("filter") === "off"
+    ? null
+    : [new OneEuroVector(NUM_CHANNELS), new OneEuroVector(NUM_CHANNELS)];
   lastResult: FaceLandmarkerResult | null = null;
 
   constructor(
@@ -106,6 +111,10 @@ export class FaceTracker {
     return this.toFrame(ts, result);
   }
 
+  private smooth(p: number, t: number, v: Float64Array): Float64Array {
+    return this.filters ? this.filters[p].filter(t, v) : v;
+  }
+
   private toFrame(t: number, r: FaceLandmarkerResult): TrackerFrame {
     const centroids = r.faceLandmarks.map((lms) => lms.reduce((s, p) => s + p.x, 0) / lms.length);
     const slots = this.assigner.assign(centroids);
@@ -116,7 +125,7 @@ export class FaceTracker {
       }
       return {
         present: true,
-        channels: this.mappers[p].map(shapes.categories, r.facialTransformationMatrixes?.[faceIdx]),
+        channels: this.smooth(p, t, this.mappers[p].map(shapes.categories, r.facialTransformationMatrixes?.[faceIdx])),
         landmarks: r.faceLandmarks[faceIdx],
         blendshapes: shapes.categories,
       };

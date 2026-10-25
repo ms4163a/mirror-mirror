@@ -29,6 +29,8 @@ export type RemoteMsg =
       roundElapsed: number;
       roundMs: number;
       presence: [boolean, boolean];
+      /** Why Start is still locked ("" when ready), shown in the guest's lobby. */
+      waiting: string;
     }
   // host -> guest, once per round
   | { type: "recap"; recap: Recap; samples: RoundSample[] };

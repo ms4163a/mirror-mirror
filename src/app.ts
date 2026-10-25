@@ -103,7 +103,10 @@ function startGame(force = false) {
     return;
   }
   if (screen !== "lobby" && screen !== "recap") return;
-  if (screen === "lobby" && !force && !(presence[0] && presence[1])) return;
+  if (screen === "lobby" && !force && !(presence[0] && presence[1])) {
+    flashStartHint();
+    return;
+  }
   const now = performance.now();
   cancelCoachNote();
   if (source instanceof ReplaySource) source.restart(now);
@@ -217,7 +220,46 @@ function broadcastState(now: number) {
     roundElapsed: round?.elapsed ?? 0,
     roundMs: round?.durationMs ?? roundMs ?? ROUND_MS,
     presence,
+    waiting: waitingFor(now, "guest"),
   });
+}
+
+/**
+ * Plain-language reason Start is locked, or "" when both players are ready.
+ * Computed on the host (or in local play); `viewer` "guest" words it for the
+ * Right player's own screen in a remote game.
+ */
+function waitingFor(now: number, viewer: "self" | "guest" = "self"): string {
+  const parts: string[] = [];
+  const fix = "sit in view, face the camera, light on your face";
+  for (const i of [0, 1] as const) {
+    if (presence[i]) continue;
+    if (link && i === 1) {
+      if (!link.peerConnected) parts.push("the Right player to join (send them the link)");
+      else if (now - lastRemoteAt > 1000)
+        parts.push(viewer === "guest" ? "your data to reach the host (if this lasts, reload this tab)" : "data from the Right player's computer (if this lasts, reload their tab)");
+      else parts.push(viewer === "guest" ? `your face (${fix})` : "the Right player's face (their camera can't find it)");
+    } else if (link && viewer === "guest") {
+      parts.push("the Left player's face (their camera can't find it)");
+    } else {
+      parts.push(`the ${i === 0 ? "Left" : "Right"} player's face (${fix})`);
+    }
+  }
+  return parts.length ? `Waiting for ${parts.join(" and ")}.` : "";
+}
+
+function setStartHint(text: string) {
+  const el = $("start-hint");
+  if (el.textContent !== text) el.textContent = text;
+  el.hidden = !text;
+}
+
+/** Pressing Start while it's locked flashes the reason instead of doing nothing. */
+function flashStartHint() {
+  const el = $("start-hint");
+  el.classList.remove("flash");
+  void el.offsetWidth; // restart the animation
+  el.classList.add("flash");
 }
 
 function onRemoteMessage(msg: RemoteMsg) {
@@ -257,6 +299,7 @@ function guestTick(dt: number) {
       case "lobby":
         for (const i of [0, 1]) $(`check-${i}`).classList.toggle("ok", st.presence[i]);
         $<HTMLButtonElement>("start").disabled = !(st.presence[0] && st.presence[1]);
+        setStartHint(st.waiting);
         break;
       case "calibrate":
         $("calib-bar").style.width = `${Math.min(100, (st.screenElapsed / CALIBRATE_MS) * 100)}%`;
@@ -358,6 +401,7 @@ function tick(now: number) {
     case "lobby":
       for (const i of [0, 1]) $(`check-${i}`).classList.toggle("ok", presence[i]);
       $<HTMLButtonElement>("start").disabled = !(presence[0] && presence[1]);
+      setStartHint(waitingFor(now));
       break;
     case "calibrate":
       $("calib-bar").style.width = `${Math.min(100, (elapsed / CALIBRATE_MS) * 100)}%`;

@@ -18,3 +18,17 @@
   background: var(--bg);
   color: var(--text);
 }
+.start-hint {
+  margin: 10px 0 0;
+  font-size: 14px;
+  color: var(--text);
+}
+.start-hint.flash { animation: hint-flash 0.9s ease-out; }
+@keyframes hint-flash {
+  0%, 30% { color: #e0a020; transform: translateX(-4px); }
+  15%, 45% { transform: translateX(4px); }
+  60%, 100% { transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .start-hint.flash { animation: none; color: #e0a020; }
+}
