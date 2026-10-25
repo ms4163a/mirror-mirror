@@ -579,7 +579,7 @@ async function init() {
       source = new CameraSource(new FaceTracker(landmarker, video));
       if (params.get("bot") === "1" && !link) {
         // Practice alone: the player is Left, a bot mirrors them on the Right.
-        source = new BotSource(source, () => (screen === "round" && round ? round.prompt.card.lead : "free"));
+        source = new BotSource(source, () => (screen === "round" && round ? round.prompt.card : null));
         video.style.visibility = "hidden"; // both players are shown as avatars
         $("cam-note").hidden = false;
         $("cam-note").textContent = "Practice vs bot · you are Left";

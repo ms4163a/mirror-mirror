@@ -74,8 +74,8 @@ A mistyped link (room codes are 4 letters) shows an error instead of starting a 
 ### Practice against a bot (one person)
 
 Open **http://localhost:5173/?bot=1**, or click "Practice against a bot" in the lobby.
-- **You play Left.** The bot on the Right mirrors you about 0.65 s late, imperfectly, so the score isn't free.
-- During "Right player leads" prompts, **the bot leads** and you copy it.
+- **You play Left; the bot plays Right and leads like a person would.** It makes the expression the prompt asks for ("Big smiles" → smile, "Surprise!" → brows up and mouth open, "Grumpy faces" → frown), eases into it, **holds it for about 3 seconds** so you can copy it, then relaxes before the next one.
+- During "Left player leads", **you lead and the bot follows**: smoothly and a little late, like a human follower.
 - Bot rounds count as test rounds and stay off the main leaderboard.
 
 ---
@@ -188,7 +188,7 @@ npm start            # build, then serve the app + API from one Node process (po
 - 138 automated tests.
 
 **New, with limited testing:**
-- **Angry-brow geometry:** the logic is unit-tested, but it isn't yet tuned on real recordings, because saved rounds don't store the face mesh. Add `?brows=blend` to fall back to the blendshape-only signal.
+- **Angry-brow geometry:** measures brow drop, angle and furrow from the face mesh, with sensitivity that adapts to each player's tracking noise. It's unit-tested, but not yet confirmed on real faces, because saved rounds don't store the face mesh. Add `?brows=blend` to fall back to the blendshape-only signal.
 - **Practice against a bot:** the bot logic is unit-tested, but it hasn't been played live much yet.
 
 **Not built:**
