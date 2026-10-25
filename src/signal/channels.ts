@@ -6,7 +6,8 @@
 // whether players mirror or copy. Head yaw and roll use absolute values for the
 // same reason. Gaze channels are dropped: both players look at the screen, so
 // gaze says nothing about mirroring.
-import type { Category, Matrix } from "@mediapipe/tasks-vision";
+import type { Category, Matrix, NormalizedLandmark } from "@mediapipe/tasks-vision";
+import { BrowGeometry } from "./brows";
 
 export type Family = "smile" | "surprise" | "frown" | "jaw" | "pucker" | "eyes" | "puff" | "head";
 
@@ -79,6 +80,7 @@ export const CHANNELS: ChannelDef[] = [
 
 export const NUM_CHANNELS = CHANNELS.length;
 const HEAD_YAW = CHANNELS.findIndex((c) => c.name === "headYaw");
+const BROW_DOWN = CHANNELS.findIndex((c) => c.name === "browDown");
 
 /** Head angles in radians are divided by these so a big head move is about 1. */
 export const YAW_SCALE = 0.5;
@@ -102,7 +104,20 @@ export function headAngles(m: Matrix): { yaw: number; pitch: number; roll: numbe
 export class ChannelMapper {
   private sourceIdx: number[][] | null = null;
 
-  map(categories: Category[], matrix?: Matrix, out: Float64Array = new Float64Array(NUM_CHANNELS)): Float64Array {
+  /** Geometric brow measurement that backs up the weak browDown blendshape (see brows.ts). */
+  private readonly brows: BrowGeometry | null;
+
+  constructor(opts: { browGeometry?: boolean } = {}) {
+    this.brows = opts.browGeometry === false ? null : new BrowGeometry();
+  }
+
+  map(
+    categories: Category[],
+    matrix?: Matrix,
+    landmarks?: NormalizedLandmark[] | null,
+    aspect = 16 / 9,
+    out: Float64Array = new Float64Array(NUM_CHANNELS),
+  ): Float64Array {
     if (!this.sourceIdx) {
       const index = new Map(categories.map((c, i) => [c.categoryName, i]));
       this.sourceIdx = CHANNELS.map((ch) =>
@@ -119,6 +134,7 @@ export class ChannelMapper {
       for (const i of idx) sum += categories[i].score;
       out[c] = sum / idx.length;
     }
+    if (this.brows) out[BROW_DOWN] = Math.max(out[BROW_DOWN], this.brows.update(landmarks, aspect));
     if (matrix) {
       const { yaw, pitch, roll } = headAngles(matrix);
       out[HEAD_YAW] = Math.abs(yaw) / YAW_SCALE;

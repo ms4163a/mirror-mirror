@@ -1,89 +1,197 @@
 # Mirror, Mirror
 
-A two-player browser game (HackTX 2026). It measures how well two people mirror each other's facial expressions in real time. The better they sync, the higher Jack climbs the beanstalk.
+A two-player browser game for HackTX 2026. Two people copy each other's facial expressions, and the better they mirror each other, the higher Jack climbs the beanstalk. After each round, a recap shows sync over time, follow lag in milliseconds, who led and for how long, and which expressions matched best.
 
-## Run
+The AI only **interprets** what your faces do. All face tracking runs in your browser, and no video ever leaves your computer. It's feedback on one round of a game, not a verdict on the players.
+
+---
+
+## Contents
+1. [Quick start (one computer)](#1-quick-start-one-computer)
+2. [How to play](#2-how-to-play)
+3. [Other ways to play](#3-other-ways-to-play): remote on two computers · practice against a bot
+4. [Leaderboard (second screen)](#4-leaderboard-second-screen)
+5. [Optional: Llama coach's note](#5-optional-llama-coachs-note)
+6. [Troubleshooting](#6-troubleshooting)
+7. [All commands, pages and URL options](#7-all-commands-pages-and-url-options)
+8. [How it works](#8-how-it-works)
+9. [Project status: what's done and what isn't](#9-project-status-whats-done-and-whats-not)
+
+---
+
+## 1. Quick start (one computer)
+
+**You need:** [Node.js 24](https://nodejs.org), Chrome or Edge, a webcam, and git.
 
 ```sh
+git clone https://github.com/ms4163a/mirror-mirror.git
+cd mirror-mirror
 npm install
-npm run dev:all    # game + leaderboard server together, or separately:
-npm run dev        #   game:        http://localhost:5173/              (Chrome)
-                   #   feasibility: http://localhost:5173/dev.html
-npm run server     #   leaderboard server on :8787 (the game proxies /api to it)
-npm test           # all tests
-npm run typecheck  # browser + server code
+npm run dev:all
 ```
 
-## Remote play (two computers)
+Open **http://localhost:5173** and allow the camera. After `npm install`, everything runs offline (the face model and runtime are bundled).
 
-Each computer tracks only its own player. Only the face-channel numbers (21 per frame) go through the server, and **video never leaves either computer**. Each player sees both players as cartoon faces. The host (Left) runs the game and streams its state and the recap to the guest (Right). Lag is measured from timestamps on a clock synced with ping/pong, not from arrival times, so network delay doesn't distort it.
+`npm run dev:all` starts two things: the game, and a small server for the leaderboard and remote play. Keep that terminal open while you play.
 
-1. On the host machine: `npm run dev:https` (game + server over HTTPS). Browsers only allow the camera on `https://` or `localhost`.
-2. Host: open `https://localhost:5173/?remote=new`, or click "Start a remote game" in the lobby. The lobby lists a guest link for each of this PC's network addresses, for example `https://192.168.1.23:5173/?room=ABCD&seat=right (Wi-Fi)` and a Tailscale one. Send the one for a network you both share.
-3. Guest, on another computer on the same network: open that link and accept the self-signed-certificate warning ("Advanced", then "Proceed"). If it won't load, allow Node through the Windows firewall on the host.
-   Campus and venue Wi-Fi often blocks devices from reaching each other. If the guest's page never loads, use Tailscale (both machines signed in to the same tailnet, then the Tailscale link) or a tunnel (step 4).
-4. Different networks: expose the host with a tunnel instead, for example `npx cloudflared tunnel --url https://localhost:5173 --no-tls-verify` or Tailscale Funnel. Then share the tunnel URL with `?room=ABCD&seat=right`. The dev server already allows `*.trycloudflare.com` and `*.ts.net`.
-5. A mistyped link (room codes are 4 letters) shows an error instead of quietly starting a one-computer game.
-6. Either player presses Space to start. Remote rounds count on the leaderboard like local camera rounds, and the host's "Download round data" includes both players' streams.
+---
 
-Test without cameras: open `?room=TEST&seat=left&sim=mirror` and `?room=TEST&seat=right&sim=mirror` in two browsers.
+## 2. How to play
 
-## Leaderboard
+1. **Sit side by side** in front of the camera, both faces fully in view. The camera should be at eye level and straight ahead, with light on your faces.
+2. When both dots in the lobby turn green, press **Space** (or click **Start**). If Start stays locked, the lobby says exactly what it's waiting for.
+3. **Relax your faces for 4 seconds** while the game measures your resting faces.
+4. **Play the 60-second round:** follow the prompt cards ("Big smiles", "Left player leads", "Swap!", …) and copy each other.
+   - Hold each expression **together for 2–3 seconds**. Matches build over a 10-second window, so quick flashes don't count much.
+   - Make expressions **big**. Your bars in the "Expression match" panel show what the camera reads for each of you.
+5. **Recap:** see your climb, sync chart, lag, who led and your best-matched expressions. You can type a team name and **Save** to the leaderboard.
 
-- After a round, players can type an optional team name and press **Save**. Only the team name and the round's numbers are sent: height, in-sync share, lag, who led, best expression, and a 2 Hz sync curve. No images.
-- **Display:** open `http://<game-PC-IP>:5173/leaderboard.html` on the leaderboard laptop, on the same network. It updates live over Server-Sent Events. If the laptop can't connect, allow Node through the Windows firewall on the game PC.
-- **Test rounds:** rounds from `?sim=` and `?replay=` are stored but hidden from the board. Add `?test=1` to show them.
-- **Offline:** if the server is down, the game queues saved rounds in localStorage and uploads them on the next start.
-- **Storage:** `server/data/rounds.jsonl`, gitignored. The store sits behind an interface (`server/store.ts`), so a Tiger Data (Postgres) store can replace it for the Vultr deployment.
-- **Production:** `npm start` builds the app and serves it plus the API from one Node process (`node server/index.ts --static dist`).
+**Keys:** `Space` start · `Esc` back to the lobby · `F` fullscreen.
 
-`npm run dev` copies the MediaPipe wasm runtime into `public/mediapipe/` before it starts. The face model is committed in `public/models/`. After `npm install` the app needs no internet.
+**If a red note appears on the camera panel** ("face your camera" or "put your camera at eye level"), fix the camera angle. Tracking gets much worse when a head is turned or tilted more than about 25°.
 
-### Game URL options
-- `?sim=mirror|swap|unison|independent|still|solo`: simulated players, no camera. Use these to work on the game and UI.
-- `?roundMs=20000`: shorter rounds for testing
-- `?delegate=CPU`: force the CPU tracker delegate
-- `?replay=<url>`: replay a recorded session in real time (put the file in `public/bench/`, e.g. `?replay=/bench/round.json`)
-- `?coach=off`: skip the Llama coach's note
+---
 
-### Recording real sessions for tuning
-"Download round data" on the recap saves a JSON file containing the recap, the 10 Hz samples and a **recording**: raw channel frames from calibration to the end of the round. A recording can be:
-- replayed through the live game with `?replay=`
-- re-scored offline with different settings using `rescore()` in `src/replay/rescore.ts`, which gives the same result as the live game
+## 3. Other ways to play
 
-Please save a few real two-person rounds during playtesting. They're what we tune `chanceR`, the climb settings and `IN_SYNC` on.
+### Remote: two computers, one player each
 
-### Llama coach's note (optional, needs Ollama)
-With Ollama running locally (`ollama pull llama3.1:8b`), the recap gets a 2–3 sentence coach's note. The dev server proxies `/ollama` to `http://localhost:11434`.
-- **Input:** the model receives only the measured recap numbers (`recapFacts()` in `src/llm/coach.ts`) and must return JSON listing the facts it used.
-- **Checks:** every number in the note must belong to one of the facts it listed, and relationship or compatibility language is rejected.
-- **Fallback:** if Ollama is off, slow, or the note fails the checks, no note is shown and everything else works the same.
+Each computer tracks only its own player. Only 21 numbers per frame are sent, never video. Each player sees both players as cartoon faces.
 
-### Art
-The scene uses simple vector placeholder shapes. Drop `public/assets/jack.png` (Jack, feet at the bottom of the image) in and it replaces the placeholder automatically.
+1. **Host (Left player):** run `npm run dev:https`. This serves the game over HTTPS, which browsers require for cameras on other devices.
+2. **Give the guest a way to reach the host.** Pick one:
+   - **Same network:** the host opens `https://localhost:5173/?remote=new` (or clicks "Start a remote game" in the lobby). The lobby lists a guest link for each of this computer's network addresses.
+   - **Different networks, or campus/venue Wi-Fi that blocks devices from seeing each other:** in a **separate terminal that you keep open**, run:
+     ```sh
+     npx cloudflared tunnel --url https://localhost:5173 --no-tls-verify
+     ```
+     It prints a public `https://….trycloudflare.com` address. The host opens `https://<that-address>/?remote=new` and sends the guest the link shown in the lobby. Each tunnel run gives a **new** address, and the tunnel stops when its terminal closes.
+3. **Guest (Right player):** open the link and accept the certificate warning if one appears ("Advanced → Proceed"). Allow the camera. Both players must use the **same** address.
+4. Either player presses Space to start. Only the host can download the round data.
 
-## How sync is measured
+A mistyped link (room codes are 4 letters) shows an error instead of starting a one-computer game.
 
-1. **Channels** (`src/signal/channels.ts`): 52 blendshapes become 18 expression channels, plus head yaw, pitch and roll. Left/right pairs are averaged and yaw and roll use absolute values, so mirroring and copying score the same. Gaze is dropped.
-   **Smoothing:** each player's channels pass through a One Euro filter (`src/signal/oneEuro.ts`, cutoff 1.5 Hz, beta 2). It removes webcam jitter while a face holds still and stays responsive during fast moves. In playtesting it cut one player's frame-to-frame jitter about 3×. Turn it off with `?filter=off`.
-2. **History** (`src/sync/history.ts`): camera frames are resampled onto a fixed 30 Hz grid. A missing face is marked absent.
-3. **Sync engine** (`src/sync/syncEngine.ts`): every 100 ms, Pearson cross-correlation on a **10 s** window at lags of **±1.5 s** (human reaction time), weighted by movement.
-   - A channel counts if either player moves on it; if only one does, it adds half weight (`oneSidedPenalty`) but no correlation, so different faces lower the score.
-   - Mouth channels and lowered ("angry") brows carry the most weight. Raised brows (0.25), blinks (0) and head pose count for less or nothing, because in real play they correlated about as well by chance.
-   - **Matched by expression family** (`matchBy: "family"`): each player's channels in a family (smile, frown, mouth open…) are z-scored within the window and summed, and then the two players' family signals are correlated. In playtesting, one player's smile showed up mostly as dimples, pressed lips and squinted eyes rather than raised mouth corners. Channel-by-channel matching scored their smiles as 0; family matching counts them.
-   - The peak's height becomes **sync**: 0 at the chance level `chanceR` = 0.30, 1 at `fullR` = 0.48. The peak's position becomes **lag**, and its sign gives the **leader** (dead zone ±80 ms).
-   - **Anti-stillness:** each player's movement is compared with their own floor from a 4 s calibration (capped at 1.5× the default, so fidgeting during calibration can't switch channels off). Two still faces score 0.
-   - **Tuning data:** five real two-person remote rounds (a sixth, played afterwards with these settings, is included in the results below). Every candidate setting was compared against 30 controls: the same rounds with one player shifted 7–47 s in time (real faces, no mirroring). The comparison was run at a matched false-positive rate, so settings are judged on how well they separate real mirroring from chance, not on how lenient they are.
-     - With the original 4 s settings, the first round scored 0.0 m.
-     - Now the six real rounds score 63 / 54 / 29 / 26 / 0 / 45 m, with 55 / 52 / 28 / 23 / 0 / 45% in sync.
-     - Their 36 controls average 3.9 m (90th percentile 10 m, worst 17 m).
-     - Lowered brows were first weighted down with the raised brows, and a playtest showed angry brows weren't counting. On the data they carry real signal, so they're back at full weight.
-     - The fifth round had one player's head turned about 37° from their camera all round, so their face barely registered. The game now warns about this.
-   - **Tried and rejected** (worse at the same false-positive rate): gating each player against their own range, per-family lags, ignoring small one-sided twitches, and correlating expression changes instead of levels.
-   - **Head-turn warning:** if a player's head stays turned more than 25° from their camera, the camera panel shows "Right: face your camera (head turned ~37°)". Tracking quality drops sharply off-axis.
-4. **Round** (`src/game/round.ts`): Jack climbs when smoothed sync is above 0.2, and slips while both players are still. `src/game/prompts.ts` holds the round script for tuning.
-5. **Recap** (`src/game/recap.ts`): time in sync, best streak, median lag, who led, leader-segment comparison, and best-matched expressions. Only measured numbers.
+### Practice against a bot (one person)
 
-### Feasibility page options (`dev.html`)
-- `?delegate=CPU`
-- `?bench=<image url>`: draws the image twice side by side for a camera-free fps benchmark (put images in the gitignored `public/bench/`)
+Open **http://localhost:5173/?bot=1**, or click "Practice against a bot" in the lobby.
+- **You play Left.** The bot on the Right mirrors you about 0.65 s late, imperfectly, so the score isn't free.
+- During "Right player leads" prompts, **the bot leads** and you copy it.
+- Bot rounds count as test rounds and stay off the main leaderboard.
+
+---
+
+## 4. Leaderboard (second screen)
+
+1. Run `npm run dev:all` (or `dev:https`) on the game computer.
+2. On any device on the same network, open `http://<game-computer-IP>:5173/leaderboard.html`. Use `https://` if the game runs with `dev:https`. It updates live when a team saves a round.
+
+**Details:**
+- Saving is optional. Only the team name and the round's numbers are stored, no images. They're stored in `server/data/rounds.jsonl` on the game computer.
+- Rounds from simulated players, replays and the bot are stored but **hidden**. Add `?test=1` to the leaderboard URL to show them.
+- If the server is down, saved rounds wait in the browser and upload the next time the game starts.
+
+---
+
+## 5. Optional: Llama coach's note
+
+Install [Ollama](https://ollama.com) on the game computer and run `ollama pull llama3.1:8b`. After each round, the recap then shows a 2–3 sentence coach's note.
+- Llama 3.1 sees **only the measured numbers** from the recap.
+- Every number in its note is checked against those numbers, and any relationship or compatibility talk is rejected.
+- If Ollama isn't running, or a note fails the checks, no note is shown. Everything else works the same.
+- Turn it off with `?coach=off`. The note only appears on the host's screen in remote games.
+
+---
+
+## 6. Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| Lobby says "Waiting for the camera…" | Click the camera icon at the right end of the address bar and choose **Allow**. Use Chrome or Edge (Opera GX blocks more). |
+| "The camera is busy" | Close Zoom, Teams, OBS, Phone Link or the Camera app, then reload. |
+| Wrong camera (e.g. a phone/virtual camera) | Pick the right one in the lobby's camera dropdown, or add `?camera=usb` (any part of the camera's name). |
+| Camera blocked on another computer | Open the `https://` address (from `npm run dev:https`); browsers only allow cameras on https or localhost. |
+| Guest link won't load | Allow Node through the Windows Firewall on the host (private networks), or use the Cloudflare tunnel. |
+| Tunnel link stopped working | The `cloudflared` terminal was closed or the PC slept. Start it again and share the **new** address. |
+| One player's expressions barely register | Face the camera straight on, camera at eye level, light from the front. Watch the per-player bars in "Expression match". |
+| Need to check speed | Open `/dev.html` with both players in view and read **"2-face fps"** (frames per second while both faces are tracked). **20 or more** is fine. |
+
+---
+
+## 7. All commands, pages and URL options
+
+**Commands**
+```sh
+npm run dev          # game only, http://localhost:5173
+npm run server       # leaderboard + remote-play server on port 8787
+npm run dev:all      # both of the above
+npm run dev:https    # both, with the game on HTTPS (for cameras on other devices / remote play)
+npm test             # all tests
+npm run typecheck    # browser + server code
+npm run build        # typecheck + production build into dist/
+npm start            # build, then serve the app + API from one Node process (port 8787)
+```
+
+**Pages**
+- `/`: the game.
+- `/leaderboard.html`: live leaderboard (`?test=1` includes test rounds).
+- `/dev.html`: tracking check (fps, "2-face fps", camera, GPU/CPU, all blendshapes).
+- `/tune.html`: load saved rounds and re-score them with different scoring settings.
+
+**Game URL options**
+
+| Option | What it does |
+|---|---|
+| `?bot=1` | practice against a bot |
+| `?remote=new` / `?room=ABCD&seat=left\|right` | remote play |
+| `?camera=<text>` | prefer a camera whose name contains this text |
+| `?delegate=CPU` | force CPU face tracking |
+| `?coach=off` | no Llama note |
+| `?roundMs=30000` | shorter rounds (prompts compress to fit) |
+| `?sim=mirror\|swap\|unison\|independent\|still\|solo` | simulated players, no camera (for testing) |
+| `?replay=<url>` | replay a saved round (put files in `public/bench/`) |
+| `?filter=off` | no jitter smoothing |
+| `?brows=blend` | angry-brow detection from the blendshape only (no geometry) |
+| `?api=http://host:8787` | use a different leaderboard server |
+
+**Recording rounds for tuning:** "Download round data" on the recap saves the recap plus the raw face data. Load the files in `/tune.html`, or replay them with `?replay=`.
+
+---
+
+## 8. How it works
+
+1. **Tracking:** MediaPipe Face Landmarker runs in the browser and tracks 2 faces (52 blendshapes plus head pose each).
+2. **Channels:** these become 21 expression channels.
+   - Left/right sides are averaged, so mirroring and copying score the same.
+   - A One Euro filter removes webcam jitter.
+   - Angry brows are also measured geometrically from the face mesh, because the browDown blendshape is weak for some faces.
+3. **Sync engine** (`src/sync/syncEngine.ts`): every 100 ms, it correlates the two players over a 10-second window at lags of up to ±1.5 s (human reaction time).
+   - Channels are grouped into expression families (smile, frown, mouth open, …). Each player's family signal is relative to their own range, so a smile that one camera reads as "mouth corners up" matches one another camera reads as "dimples and pressed lips".
+   - The peak correlation gives **sync**. Its timing gives **lag** and **who led**.
+   - **Anti-stillness:** each player's movement is compared with their own resting face from calibration, so two still faces score 0.
+4. **Climb:** Jack climbs when smoothed sync is above 0.2, and slips if both players are still.
+5. **Tuning on real play:** the scoring settings were tuned on real two-person rounds. They were compared against the same rounds with one player time-shifted, which keeps real faces but removes any mirroring.
+   - Real rounds climbed 26–63 m, except one where a player's head was turned about 37° from their camera.
+   - The time-shifted controls averaged about 4 m.
+
+**Code map:** `src/app.ts` (game flow) · `src/tracking/` (camera, MediaPipe) · `src/signal/` (channels, filter, brows, meters) · `src/sync/` (engine) · `src/game/` (round, prompts, recap) · `src/ui/` (scene, HUD, recap) · `src/llm/` (coach) · `src/remote/` + `server/rooms.ts` (remote play) · `src/net/` + `server/` + `shared/` (leaderboard) · `src/input/` (camera, simulated, replay, bot sources) · `src/replay/` (recording, re-scoring) · `src/tune/` (tuning page).
+
+---
+
+## 9. Project status: what's done and what's not
+
+**Working and tested:**
+- One-computer two-player game, recap, leaderboard (live updates, offline queue).
+- Remote play on two computers: played in real rounds over a Cloudflare tunnel.
+- Llama coach's note (needs local Ollama).
+- Recording, replay and the tuning page.
+- Camera picker and warnings.
+- 138 automated tests.
+
+**New, with limited testing:**
+- **Angry-brow geometry:** the logic is unit-tested, but it isn't yet tuned on real recordings, because saved rounds don't store the face mesh. Add `?brows=blend` to fall back to the blendshape-only signal.
+- **Practice against a bot:** the bot logic is unit-tested, but it hasn't been played live much yet.
+
+**Not built:**
+- Hosted deployment (Vultr) and a database (Tiger Data). The leaderboard uses a local file. `npm start` can serve everything from one process, but it hasn't been deployed.
+- Custom art and sound. Jack and the scenery are simple placeholder drawings; a hand-drawn `public/assets/jack.png` would replace Jack automatically.
+- Scoring tuned for more than one pair of players. It was tuned on one pair's rounds, so other faces may score differently.

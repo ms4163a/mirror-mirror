@@ -85,7 +85,11 @@ export class FaceTracker {
   private lastVideoTime = -1;
   private lastTs = -1;
   private readonly assigner = new PlayerAssigner();
-  private readonly mappers = [new ChannelMapper(), new ChannelMapper()];
+  // ?brows=blend turns off the geometric angry-brow measurement (blendshape only).
+  private readonly mappers = (() => {
+    const browGeometry = new URLSearchParams(location.search).get("brows") !== "blend";
+    return [new ChannelMapper({ browGeometry }), new ChannelMapper({ browGeometry })];
+  })();
   // Smooths webcam jitter per player (see signal/oneEuro.ts). Disable with ?filter=off.
   private readonly filters = new URLSearchParams(location.search).get("filter") === "off"
     ? null
@@ -111,6 +115,14 @@ export class FaceTracker {
     return this.toFrame(ts, result);
   }
 
+  /** Width / height of the camera image (landmarks are normalized per axis). */
+  private aspect(): number {
+    const s = this.source;
+    const w = s instanceof HTMLVideoElement ? s.videoWidth : s.width;
+    const h = s instanceof HTMLVideoElement ? s.videoHeight : s.height;
+    return w > 0 && h > 0 ? w / h : 16 / 9;
+  }
+
   private smooth(p: number, t: number, v: Float64Array): Float64Array {
     return this.filters ? this.filters[p].filter(t, v) : v;
   }
@@ -125,7 +137,11 @@ export class FaceTracker {
       }
       return {
         present: true,
-        channels: this.smooth(p, t, this.mappers[p].map(shapes.categories, r.facialTransformationMatrixes?.[faceIdx])),
+        channels: this.smooth(
+          p,
+          t,
+          this.mappers[p].map(shapes.categories, r.facialTransformationMatrixes?.[faceIdx], r.faceLandmarks[faceIdx], this.aspect()),
+        ),
         landmarks: r.faceLandmarks[faceIdx],
         blendshapes: shapes.categories,
       };

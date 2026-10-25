@@ -19,6 +19,7 @@ import { Round, type RoundSample } from "./game/round";
 import { cancelCoachNote, showCoachNote } from "./llm/coachView";
 import { flushQueue } from "./net/leaderboardClient";
 import { showSaveBox } from "./net/saveView";
+import { BotSource } from "./input/bot";
 import { CameraSource, ReplaySource, SIM_MODES, SimSource, type FrameSource, type SimMode } from "./input/sources";
 import { RemoteLink, newRoomCode, type Seat } from "./remote/link";
 import type { RemoteMsg, ScreenName } from "./remote/protocol";
@@ -576,6 +577,16 @@ async function init() {
       const preferred = params.get("delegate")?.toUpperCase() === "CPU" ? "CPU" : undefined;
       const { landmarker } = await createLandmarker(preferred);
       source = new CameraSource(new FaceTracker(landmarker, video));
+      if (params.get("bot") === "1" && !link) {
+        // Practice alone: the player is Left, a bot mirrors them on the Right.
+        source = new BotSource(source, () => (screen === "round" && round ? round.prompt.card.lead : "free"));
+        video.style.visibility = "hidden"; // both players are shown as avatars
+        $("cam-note").hidden = false;
+        $("cam-note").textContent = "Practice vs bot · you are Left";
+        $("lobby-lede").textContent =
+          "Practice mode: you're the Left player. The bot on the Right mirrors you, and leads when the prompt says the Right player leads. Bot rounds stay off the main leaderboard.";
+        $("remote-start").hidden = true;
+      }
     }
   } catch (err) {
     console.error(err);
@@ -590,6 +601,10 @@ async function init() {
     if (e.code === "Space" || e.code === "Enter") {
       e.preventDefault();
       startGame();
+    } else if (e.code === "KeyF") {
+      // Fullscreen for the live demo.
+      if (document.fullscreenElement) void document.exitFullscreen();
+      else void document.documentElement.requestFullscreen().catch(() => {});
     } else if (e.code === "Escape" && !isGuest()) {
       // Abandon the round. startGame() rebuilds the engine, so only display state needs clearing.
       round = null;
